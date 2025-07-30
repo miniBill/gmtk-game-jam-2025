@@ -71,8 +71,8 @@ update msg maybeModel =
                         generatedSeed
 
                 ( hand, ( opponentHand, deck ) ) =
-                    List.Extra.splitAt 10 initialDeck
-                        |> Tuple.mapSecond (List.Extra.splitAt 10)
+                    List.Extra.splitAt 5 initialDeck
+                        |> Tuple.mapSecond (List.Extra.splitAt 5)
 
                 newModel : Model
                 newModel =
@@ -122,7 +122,7 @@ view maybeModel =
 
                 w : number
                 w =
-                    8
+                    5
 
                 h : number
                 h =
@@ -147,7 +147,8 @@ view maybeModel =
                 [ g [ transform [ Translate 0 1 ] ] [ viewAvatar model.currentAvatar ]
                 , g [ transform [ Translate 1 0 ] ] (viewCards model.beingPlayed model.hand)
                 ]
-            , g [ id "deck" ] []
+            , g [ id "deck", transform [ Translate 0 2 ] ]
+                []
             ]
                 |> svg
                     [ viewBox -border -border (w + border * 2) (h + border * 2)
@@ -161,7 +162,7 @@ viewOpponentCards beingPlayed opponentHand =
     let
         moveDown : Bool
         moveDown =
-            List.length beingPlayed == 10
+            List.length beingPlayed == 5
 
         shuffled : List (Card Opponent)
         shuffled =
