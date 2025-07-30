@@ -19,6 +19,11 @@ import TypedSvg.Types exposing (AnchorAlignment(..), Cursor(..), DominantBaselin
 import Types exposing (Card(..), Character(..), Deck, Flags, Opponent, Player)
 
 
+handSize : number
+handSize =
+    7
+
+
 type alias Model =
     { currentAvatar : ( Character, Graphics )
     , opponentHand : List (Card Opponent)
@@ -52,7 +57,7 @@ init _ =
         _ =
             Debug.todo
       in
-      Random.initialSeed 0
+      Random.initialSeed 413
         |> Random.constant
         |> Random.generate GeneratedSeed
     )
@@ -71,8 +76,8 @@ update msg maybeModel =
                         generatedSeed
 
                 ( hand, ( opponentHand, deck ) ) =
-                    List.Extra.splitAt 5 initialDeck
-                        |> Tuple.mapSecond (List.Extra.splitAt 5)
+                    List.Extra.splitAt handSize initialDeck
+                        |> Tuple.mapSecond (List.Extra.splitAt handSize)
 
                 newModel : Model
                 newModel =
@@ -122,7 +127,7 @@ view maybeModel =
 
                 w : number
                 w =
-                    5
+                    6
 
                 h : number
                 h =
@@ -138,7 +143,7 @@ view maybeModel =
                 []
             , g [ id "opponentGroup" ]
                 [ viewAvatar (Types.previous model.currentAvatar)
-                , g [ transform [ Translate 1 0 ] ] [ viewOpponentCards model.beingPlayed model.opponentHand ]
+                , g [ transform [ Translate 1 0 ] ] [ viewOpponentCards model.mainSeed model.beingPlayed model.opponentHand ]
                 ]
             , g
                 [ id "playerGroup"
@@ -157,19 +162,20 @@ view maybeModel =
                     ]
 
 
-viewOpponentCards : List (Card Player) -> List (Card Opponent) -> Svg msg
-viewOpponentCards beingPlayed opponentHand =
+viewOpponentCards : Random.Seed -> List (Card Player) -> List (Card Opponent) -> Svg msg
+viewOpponentCards seed beingPlayed opponentHand =
     let
         moveDown : Bool
         moveDown =
-            List.length beingPlayed == 5
+            List.length beingPlayed == handSize
 
         shuffled : List (Card Opponent)
         shuffled =
             if moveDown then
                 opponentHand
+                    |> shuffle seed
                     |> List.Extra.permutations
-                    |> List.Extra.maximumBy (opponentScore beingPlayed)
+                    |> List.Extra.minimumBy (opponentScore beingPlayed)
                     |> Maybe.withDefault opponentHand
 
             else
@@ -178,12 +184,31 @@ viewOpponentCards beingPlayed opponentHand =
     opponentHand
         |> List.map
             (\card ->
-                viewOpponentCard
-                    (List.Extra.elemIndex card shuffled |> Maybe.withDefault 0)
-                    moveDown
-                    card
+                viewCard []
+                    { x =
+                        List.Extra.elemIndex card shuffled
+                            |> Maybe.withDefault 0
+                            |> toFloat
+                            |> (*) 0.7
+                    , y =
+                        if moveDown then
+                            1
+
+                        else
+                            0
+                    , card = card
+                    , faceUp = False
+                    }
             )
         |> g [ id "opponentCards" ]
+
+
+shuffle : Random.Seed -> List a -> List a
+shuffle seed list =
+    Random.step
+        (Random.List.shuffle list)
+        seed
+        |> Tuple.first
 
 
 opponentScore : List (Card Player) -> List (Card Opponent) -> Int
@@ -208,35 +233,6 @@ playerScore playerHand opponentHand =
         playerHand
         opponentHand
         |> List.sum
-
-
-viewOpponentCard : Int -> Bool -> Card Opponent -> Svg msg
-viewOpponentCard cardIndex moveDown (Card c) =
-    g
-        [ class [ "card" ]
-        , transform
-            [ Translate (toFloat cardIndex * 0.7)
-                (if moveDown then
-                    1
-
-                 else
-                    0
-                )
-            ]
-        , style "transition: all 0.4s ease-in-out"
-        ]
-        [ rect
-            [ x 0.1
-            , y 0.1
-            , width 0.5
-            , height 0.8
-            , rx 0.2
-            , fill (Paint Color.gray)
-            , stroke (Paint Color.black)
-            ]
-            []
-        , text_ [ x 0.2, y 0.6 ] [ text (String.fromInt c) ]
-        ]
 
 
 viewCards : List (Card Player) -> List (Card Player) -> List (Svg Msg)
@@ -264,6 +260,8 @@ viewCards beingPlayed cards =
                             (if inHand then
                                 { x = handX
                                 , y = 1
+                                , faceUp = True
+                                , card = card
                                 }
 
                              else
@@ -273,9 +271,10 @@ viewCards beingPlayed cards =
                                         |> toFloat
                                         |> (*) 0.7
                                 , y = 0
+                                , faceUp = True
+                                , card = card
                                 }
                             )
-                            card
                 in
                 ( if inHand then
                     handX + 0.7
@@ -289,42 +288,84 @@ viewCards beingPlayed cards =
         |> Tuple.second
 
 
-viewCard : List (Attribute msg) -> { x : Float, y : Float } -> Card Player -> Svg msg
-viewCard attrs coord (Card c) =
+viewCard :
+    List (Attribute msg)
+    ->
+        { x : Float
+        , y : Float
+        , faceUp : Bool
+        , card : Card kind
+        }
+    -> Svg msg
+viewCard attrs config =
     g
         (class [ "card" ]
-            :: transform [ Translate coord.x coord.y ]
+            :: transform [ Translate config.x config.y ]
             :: style "transition: all 0.4s ease-in-out"
             :: attrs
         )
-        [ rect
-            [ x 0.1
-            , y 0.1
-            , width 0.5
-            , height 0.8
-            , rx 0.2
-            , fill
-                (Paint
-                    (Oklch.toColor
-                        { alpha = 1
-                        , lightness = 0.85
-                        , chroma = 0.07
-                        , hue = (toFloat c - 1) / 100
-                        }
+        (if config.faceUp then
+            let
+                (Card c) =
+                    config.card
+            in
+            [ rect
+                [ x 0.1
+                , y 0.1
+                , width 0.5
+                , height 0.8
+                , rx 0.2
+                , fill
+                    (Paint
+                        (Oklch.toColor
+                            { alpha = 1
+                            , lightness = 0.85
+                            , chroma = 0.07
+                            , hue = (toFloat c - 1) / 100
+                            }
+                        )
                     )
-                )
-            , stroke (Paint Color.black)
+                , stroke (Paint Color.black)
+                ]
+                []
+            , text_
+                [ x 0.35
+                , y 0.5
+                , textAnchor AnchorMiddle
+                , dominantBaseline DominantBaselineCentral
+                , fill (Paint Color.black)
+                ]
+                [ text (String.fromInt c) ]
             ]
-            []
-        , text_
-            [ x 0.35
-            , y 0.5
-            , textAnchor AnchorMiddle
-            , dominantBaseline DominantBaselineCentral
-            , fill (Paint Color.black)
+
+         else
+            [ rect
+                [ x 0.1
+                , y 0.1
+                , width 0.5
+                , height 0.8
+                , rx 0.2
+                , fill (Paint Color.darkGreen)
+                , stroke (Paint Color.black)
+                ]
+                []
+            , let
+                _ =
+                    Debug.todo
+
+                (Card c) =
+                    config.card
+              in
+              text_
+                [ x 0.35
+                , y 0.5
+                , textAnchor AnchorMiddle
+                , dominantBaseline DominantBaselineCentral
+                , fill (Paint Color.green)
+                ]
+                [ text (String.fromInt c) ]
             ]
-            [ text (String.fromInt c) ]
-        ]
+        )
 
 
 viewAvatar : ( Character, Graphics ) -> Svg msg
