@@ -1,4 +1,4 @@
-module Types exposing (Color(..), Flags, colorToString, nextColor, nextGraphics, previousColor, previousGraphics)
+module Types exposing (Character(..), Flags, colorToString, next, nextCharacter, nextGraphics, previous, previousCharacter, previousGraphics)
 
 import Avataaars.Graphics exposing (Graphics(..))
 
@@ -7,7 +7,7 @@ type alias Flags =
     {}
 
 
-type Color
+type Character
     = Aradia
     | Tavros
     | Sollux
@@ -22,7 +22,7 @@ type Color
     | Feferi
 
 
-colorToString : Color -> String
+colorToString : Character -> String
 colorToString color =
     case color of
         Aradia ->
@@ -62,8 +62,22 @@ colorToString color =
             "#77003c"
 
 
-nextColor : Color -> Color
-nextColor color =
+next : ( Character, Graphics ) -> ( Character, Graphics )
+next ( color, graphics ) =
+    ( nextCharacter color
+    , nextGraphics graphics
+    )
+
+
+previous : ( Character, Graphics ) -> ( Character, Graphics )
+previous ( color, graphics ) =
+    ( previousCharacter color
+    , previousGraphics graphics
+    )
+
+
+nextCharacter : Character -> Character
+nextCharacter color =
     case color of
         Aradia ->
             Kanaya
@@ -102,8 +116,8 @@ nextColor color =
             Nepeta
 
 
-previousColor : Color -> Color
-previousColor color =
+previousCharacter : Character -> Character
+previousCharacter color =
     case color of
         Kanaya ->
             Aradia

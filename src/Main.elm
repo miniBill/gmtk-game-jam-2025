@@ -1,34 +1,38 @@
 module Main exposing (Model, Msg, main)
 
 import Avataaars
-import Avataaars.Accessory as Accessory
-import Avataaars.Clothes as Clothes
-import Avataaars.Eyebrow as Eyebrow
-import Avataaars.Eyes as Eyes
-import Avataaars.Face exposing (Face)
-import Avataaars.FacialHair as FacialHair
 import Avataaars.Graphics exposing (Graphics(..))
-import Avataaars.HairColor as HairColor
-import Avataaars.Mouth as Mouth
-import Avataaars.Top as Top exposing (Top)
+import Avatars
 import Browser
-import Svg exposing (Svg, g, svg)
-import Svg.Attributes exposing (cursor, transform, viewBox)
-import Svg.Events exposing (onClick)
-import Types exposing (Color(..), Flags)
+import Color exposing (Color)
+import Color.Oklch as Oklch
+import Hex
+import List.Extra
+import Random
+import TypedSvg exposing (g, rect, svg, text_)
+import TypedSvg.Attributes exposing (class, cursor, dominantBaseline, fill, id, stroke, style, textAnchor, transform, viewBox)
+import TypedSvg.Attributes.InPx exposing (fontSize, height, rx, strokeWidth, width, x, y)
+import TypedSvg.Core exposing (Attribute, Svg, text)
+import TypedSvg.Events exposing (onClick)
+import TypedSvg.Types exposing (AnchorAlignment(..), Cursor(..), DominantBaseline(..), Paint(..), Transform(..))
+import Types exposing (Character(..), Flags)
 
 
 type alias Model =
-    { currentAvatar : ( Color, Graphics )
+    { currentAvatar : ( Character, Graphics )
+    , hand : List Int
+    , beingPlayed : List Int
+    , mainSeed : Random.Seed
     }
 
 
 type Msg
-    = Next
-    | Previous
+    = GeneratedSeed Random.Seed
+    | Play Int
+    | Unplay Int
 
 
-main : Program Flags Model Msg
+main : Program Flags (Maybe Model) Msg
 main =
     Browser.element
         { init = init
@@ -38,214 +42,227 @@ main =
         }
 
 
-init : flags -> ( Model, Cmd msg )
+init : flags -> ( Maybe Model, Cmd Msg )
 init _ =
-    ( { currentAvatar = ( Aradia, Bat ) }, Cmd.none )
-
-
-update : Msg -> Model -> ( Model, Cmd msg )
-update msg model =
-    case msg of
-        Next ->
-            ( { currentAvatar = next model.currentAvatar
-              }
-            , Cmd.none
-            )
-
-        Previous ->
-            ( { currentAvatar = previous model.currentAvatar
-              }
-            , Cmd.none
-            )
-
-
-next : ( Color, Graphics ) -> ( Color, Graphics )
-next ( color, graphics ) =
-    ( Types.nextColor color
-    , Types.nextGraphics graphics
+    ( Nothing
+    , let
+        _ =
+            Debug.todo
+      in
+      Random.initialSeed 0
+        |> Random.constant
+        |> Random.generate GeneratedSeed
     )
 
 
-previous : ( Color, Graphics ) -> ( Color, Graphics )
-previous ( color, graphics ) =
-    ( Types.previousColor color
-    , Types.previousGraphics graphics
-    )
-
-
-view : Model -> Svg Msg
-view model =
-    List.range 0 11
-        |> List.map
-            (\i ->
-                let
-                    ( color, graphics ) =
-                        iterate i next model.currentAvatar
-                in
-                g
-                    [ transform
-                        ("translate("
-                            ++ String.fromInt (modBy 4 i * 50)
-                            ++ " "
-                            ++ String.fromInt (i // 4 * 50)
-                            ++ ")"
-                        )
-                    , cursor "pointer"
-                    , onClick
-                        (if i < 6 then
-                            Previous
-
-                         else
-                            Next
-                        )
-                    ]
-                    [ Avataaars.view
-                        { width = 50
-                        , height = 50
-                        }
-                        { circleBg = True
-                        , clothes = Clothes.GraphicShirt (Types.colorToString color) graphics
-                        , skinTone = "#c4c4c4"
-                        , face = colorToFace color
-                        , top = colorToTop color
-                        }
-                    ]
+update : Msg -> Maybe Model -> ( Maybe Model, Cmd msg )
+update msg maybeModel =
+    case ( msg, maybeModel ) of
+        ( GeneratedSeed seed, _ ) ->
+            let
+                newModel : Model
+                newModel =
+                    { currentAvatar = ( Aradia, Bat )
+                    , hand =
+                        List.range 1 10
+                            |> List.map
+                                (\i ->
+                                    modBy 100 (i * 1337) + 1
+                                )
+                            |> List.sort
+                    , beingPlayed = []
+                    , mainSeed = seed
+                    }
+            in
+            ( Just newModel
+            , Cmd.none
             )
-        |> svg [ viewBox "-10 -10 220 170" ]
+
+        ( _, Nothing ) ->
+            ( maybeModel, Cmd.none )
+
+        ( Play i, Just model ) ->
+            ( { model
+                | beingPlayed = model.beingPlayed ++ [ i ]
+              }
+                |> Just
+            , Cmd.none
+            )
+
+        ( Unplay i, Just model ) ->
+            ( { model
+                | beingPlayed = List.Extra.remove i model.beingPlayed
+              }
+                |> Just
+            , Cmd.none
+            )
 
 
-iterate : Int -> (a -> a) -> a -> a
-iterate i f x =
-    if i <= 0 then
-        x
+view : Maybe Model -> TypedSvg.Core.Svg Msg
+view maybeModel =
+    case maybeModel of
+        Nothing ->
+            text "Loading..."
 
-    else
-        iterate (i - 1) f (f x)
+        Just model ->
+            let
+                border : Float
+                border =
+                    0.1
+
+                w : number
+                w =
+                    8
+
+                h : number
+                h =
+                    4
+            in
+            [ rect
+                [ x -border
+                , y -border
+                , width (w + border * 2)
+                , height (h + border * 2)
+                , fill (Paint (colorFromHex "#0e6037"))
+                ]
+                []
+            , g [ id "opponentGroup" ]
+                [ viewAvatar (Types.previous model.currentAvatar)
+                ]
+            , g
+                [ id "playerGroup"
+                , transform [ Translate 0 2 ]
+                ]
+                [ g [ transform [ Translate 0 1 ] ] [ viewAvatar model.currentAvatar ]
+                , g [ transform [ Translate 1 0 ] ] (viewCards model.beingPlayed model.hand)
+                ]
+            ]
+                |> svg
+                    [ viewBox -border -border (w + border * 2) (h + border * 2)
+                    , strokeWidth 0.05
+                    , fontSize 0.25
+                    ]
 
 
-colorToTop : Color -> Top
-colorToTop color =
+colorFromHex : String -> Color
+colorFromHex hex =
     let
-        hairColorAccessoryFacialHair : Top.TopHairColorAccessoryFacialHair -> Top
-        hairColorAccessoryFacialHair hair =
-            Top.TopHairColorAccessoryFacialHair hair HairColor.black Accessory.Blank FacialHair.Blank
+        r : String
+        r =
+            String.slice 0 2 hex
+
+        g : String
+        g =
+            String.slice 2 4 hex
+
+        b : String
+        b =
+            String.slice 4 6 hex
+
+        i : String -> Int
+        i v =
+            v
+                |> Hex.fromString
+                |> Result.withDefault 0
     in
-    case color of
-        Aradia ->
-            hairColorAccessoryFacialHair Top.LongHairCurvy
-
-        Tavros ->
-            hairColorAccessoryFacialHair Top.ShortHairFrizzle
-
-        Sollux ->
-            Top.TopHairColorAccessoryFacialHair Top.ShortHairShortFlat HairColor.black Accessory.Wayfarers FacialHair.Blank
-
-        Karkat ->
-            hairColorAccessoryFacialHair Top.ShortHairDreads02
-
-        Nepeta ->
-            Top.TopHatColorAccessoryFacialHair Top.WinterHat4 "#003bff" Accessory.Blank FacialHair.Blank
-
-        Kanaya ->
-            hairColorAccessoryFacialHair Top.ShortHairShaggyMullet
-
-        Terezi ->
-            Top.TopHairColorAccessoryFacialHair Top.LongHairMiaWallace HairColor.black Accessory.Sunglasses FacialHair.Blank
-
-        Vriska ->
-            hairColorAccessoryFacialHair Top.LongHairStraight2
-
-        Equius ->
-            Top.TopHairColorAccessoryFacialHair Top.ShortHairTheCaesarSidePart HairColor.black Accessory.Sunglasses FacialHair.Blank
-
-        Gamzee ->
-            hairColorAccessoryFacialHair Top.LongHairDreads
-
-        Eridan ->
-            hairColorAccessoryFacialHair Top.ShortHairShortCurly
-
-        Feferi ->
-            Top.TopHairColorAccessoryFacialHair Top.LongHairBigHair HairColor.black Accessory.Kurt FacialHair.Blank
+    Color.rgb255 (i r) (i g) (i b)
 
 
-colorToFace : Color -> Face
-colorToFace color =
-    { mouth =
-        case color of
-            Aradia ->
-                Mouth.Smile
+viewCards : List Int -> List Int -> List (Svg Msg)
+viewCards beingPlayed cards =
+    cards
+        |> List.foldl
+            (\card ( handX, acc ) ->
+                let
+                    inHand : Bool
+                    inHand =
+                        not (List.member card beingPlayed)
 
-            Sollux ->
-                Mouth.Serious
+                    cardView : Svg Msg
+                    cardView =
+                        viewCard
+                            [ onClick
+                                (if inHand then
+                                    Play card
 
-            Karkat ->
-                Mouth.ScreamOpen
+                                 else
+                                    Unplay card
+                                )
+                            , cursor CursorPointer
+                            ]
+                            (if inHand then
+                                { x = handX
+                                , y = 1
+                                }
 
-            Nepeta ->
-                Mouth.Eating
+                             else
+                                { x =
+                                    List.Extra.elemIndex card beingPlayed
+                                        |> Maybe.withDefault 0
+                                        |> toFloat
+                                        |> (*) 0.7
+                                , y = 0
+                                }
+                            )
+                            card
+                in
+                ( if inHand then
+                    handX + 0.7
 
-            Kanaya ->
-                Mouth.Twinkle
+                  else
+                    handX
+                , cardView :: acc
+                )
+            )
+            ( 0, [] )
+        |> Tuple.second
 
-            Equius ->
-                Mouth.Grimace
 
-            Vriska ->
-                Mouth.Smile
+viewCard : List (Attribute msg) -> { x : Float, y : Float } -> Int -> Svg msg
+viewCard attrs coord c =
+    g
+        (class [ "card" ]
+            :: transform [ Translate coord.x coord.y ]
+            :: style "transition: all 0.4s ease-in-out"
+            :: attrs
+        )
+        [ rect
+            [ x 0.1
+            , y 0.1
+            , width 0.5
+            , height 0.8
+            , rx 0.2
+            , fill
+                (Paint
+                    (Oklch.toColor
+                        { alpha = 1
+                        , lightness = 0.85
+                        , chroma = 0.07
+                        , hue = (toFloat c - 1) / 100
+                        }
+                    )
+                )
+            , stroke (Paint Color.black)
+            ]
+            []
+        , text_
+            [ x 0.35
+            , y 0.5
+            , textAnchor AnchorMiddle
+            , dominantBaseline DominantBaselineCentral
+            , fill (Paint Color.black)
+            ]
+            [ text (String.fromInt c) ]
+        ]
 
-            Gamzee ->
-                Mouth.Tongue
 
-            _ ->
-                Mouth.Default
-    , eyebrow =
-        case color of
-            Sollux ->
-                Eyebrow.Angry
-
-            Karkat ->
-                Eyebrow.Angry
-
-            Vriska ->
-                Eyebrow.Angry
-
-            Gamzee ->
-                Eyebrow.UnibrowNatural
-
-            Eridan ->
-                Eyebrow.UpDown
-
-            _ ->
-                Eyebrow.Default
-    , eyes =
-        case color of
-            Aradia ->
-                Eyes.Dizzy
-
-            Sollux ->
-                Eyes.EyeRoll
-
-            Nepeta ->
-                Eyes.Hearts
-
-            Kanaya ->
-                Eyes.Side
-
-            Terezi ->
-                Eyes.Close
-
-            Vriska ->
-                Eyes.Squint
-
-            Gamzee ->
-                Eyes.Surprised
-
-            Eridan ->
-                Eyes.Squint
-
-            _ ->
-                Eyes.Default
-    }
+viewAvatar : ( Character, Graphics ) -> Svg msg
+viewAvatar character =
+    Avataaars.view
+        { width = 1
+        , height = 1
+        }
+        (Avatars.characterToAvatar character)
 
 
 subscriptions : model -> Sub msg
