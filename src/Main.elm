@@ -123,7 +123,7 @@ view maybeModel =
                 , y -border
                 , width (w + border * 2)
                 , height (h + border * 2)
-                , fill (Paint (colorFromHex "#0e6037"))
+                , fill (Paint (colorFromHex "#234000"))
                 ]
                 []
             , g [ id "opponentGroup" ]
