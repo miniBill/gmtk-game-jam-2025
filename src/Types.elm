@@ -1,4 +1,4 @@
-module Types exposing (Character(..), Flags, colorToString, next, nextCharacter, nextGraphics, previous, previousCharacter, previousGraphics)
+module Types exposing (Character(..), Flags, colorToString, next, previous)
 
 import Avataaars.Graphics exposing (Graphics(..))
 
@@ -80,79 +80,79 @@ nextCharacter : Character -> Character
 nextCharacter color =
     case color of
         Aradia ->
-            Kanaya
+            Nepeta
 
         Tavros ->
-            Terezi
-
-        Sollux ->
             Vriska
 
-        Karkat ->
-            Equius
-
-        Nepeta ->
-            Gamzee
-
-        Kanaya ->
-            Eridan
-
-        Terezi ->
-            Feferi
-
-        Vriska ->
-            Aradia
-
-        Equius ->
-            Tavros
-
-        Gamzee ->
-            Sollux
-
-        Eridan ->
+        Sollux ->
             Karkat
 
+        Karkat ->
+            Terezi
+
+        Nepeta ->
+            Eridan
+
+        Kanaya ->
+            Equius
+
+        Terezi ->
+            Gamzee
+
+        Vriska ->
+            Kanaya
+
+        Equius ->
+            Aradia
+
+        Gamzee ->
+            Tavros
+
+        Eridan ->
+            Feferi
+
         Feferi ->
-            Nepeta
+            Sollux
 
 
 previousCharacter : Character -> Character
 previousCharacter color =
     case color of
-        Kanaya ->
+        Nepeta ->
             Aradia
 
-        Terezi ->
+        Vriska ->
             Tavros
 
-        Vriska ->
+        Karkat ->
             Sollux
 
-        Equius ->
+        Terezi ->
             Karkat
 
-        Gamzee ->
+        Eridan ->
             Nepeta
 
-        Eridan ->
+        Equius ->
             Kanaya
 
-        Feferi ->
+        Gamzee ->
             Terezi
 
-        Aradia ->
+        Kanaya ->
             Vriska
 
-        Tavros ->
+        Aradia ->
             Equius
 
-        Sollux ->
+        Tavros ->
             Gamzee
 
-        Karkat ->
+        Feferi ->
             Eridan
 
-        Nepeta ->
+        Sollux ->
             Feferi
 
 

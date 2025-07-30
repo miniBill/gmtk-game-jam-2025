@@ -62,7 +62,7 @@ update msg maybeModel =
             let
                 newModel : Model
                 newModel =
-                    { currentAvatar = ( Aradia, Bat )
+                    { currentAvatar = ( Karkat, Skull )
                     , hand =
                         List.range 1 10
                             |> List.map
