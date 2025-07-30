@@ -1,4 +1,4 @@
-module Avatars exposing (characterToAvatar, characterToTop)
+module Avatars exposing (characterToAvatar)
 
 import Avataaars.Accessory as Accessory
 import Avataaars.Clothes as Clothes exposing (Clothes)

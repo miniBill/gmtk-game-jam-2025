@@ -4,32 +4,35 @@ import Avataaars
 import Avataaars.Graphics exposing (Graphics(..))
 import Avatars
 import Browser
-import Color exposing (Color)
+import Color
+import Color.Extra exposing (colorFromHex)
 import Color.Oklch as Oklch
-import Hex
 import List.Extra
 import Random
+import Random.List
 import TypedSvg exposing (g, rect, svg, text_)
 import TypedSvg.Attributes exposing (class, cursor, dominantBaseline, fill, id, stroke, style, textAnchor, transform, viewBox)
 import TypedSvg.Attributes.InPx exposing (fontSize, height, rx, strokeWidth, width, x, y)
 import TypedSvg.Core exposing (Attribute, Svg, text)
 import TypedSvg.Events exposing (onClick)
 import TypedSvg.Types exposing (AnchorAlignment(..), Cursor(..), DominantBaseline(..), Paint(..), Transform(..))
-import Types exposing (Character(..), Flags)
+import Types exposing (Card(..), Character(..), Deck, Flags, Opponent, Player)
 
 
 type alias Model =
     { currentAvatar : ( Character, Graphics )
-    , hand : List Int
-    , beingPlayed : List Int
+    , opponentHand : List (Card Opponent)
+    , deck : List (Card Deck)
+    , hand : List (Card Player)
+    , beingPlayed : List (Card Player)
     , mainSeed : Random.Seed
     }
 
 
 type Msg
     = GeneratedSeed Random.Seed
-    | Play Int
-    | Unplay Int
+    | Play (Card Player)
+    | Unplay (Card Player)
 
 
 main : Program Flags (Maybe Model) Msg
@@ -58,19 +61,26 @@ init _ =
 update : Msg -> Maybe Model -> ( Maybe Model, Cmd msg )
 update msg maybeModel =
     case ( msg, maybeModel ) of
-        ( GeneratedSeed seed, _ ) ->
+        ( GeneratedSeed generatedSeed, _ ) ->
             let
+                ( initialDeck, seed ) =
+                    Random.step
+                        (List.range 1 100
+                            |> Random.List.shuffle
+                        )
+                        generatedSeed
+
+                ( hand, ( opponentHand, deck ) ) =
+                    List.Extra.splitAt 10 initialDeck
+                        |> Tuple.mapSecond (List.Extra.splitAt 10)
+
                 newModel : Model
                 newModel =
                     { currentAvatar = ( Karkat, Skull )
-                    , hand =
-                        List.range 1 10
-                            |> List.map
-                                (\i ->
-                                    modBy 100 (i * 1337) + 1
-                                )
-                            |> List.sort
+                    , hand = List.map Card (List.sort hand)
                     , beingPlayed = []
+                    , opponentHand = List.map Card (List.sort opponentHand)
+                    , deck = List.map Card deck
                     , mainSeed = seed
                     }
             in
@@ -128,6 +138,7 @@ view maybeModel =
                 []
             , g [ id "opponentGroup" ]
                 [ viewAvatar (Types.previous model.currentAvatar)
+                , g [ transform [ Translate 1 0 ] ] [ viewOpponentCards model.beingPlayed model.opponentHand ]
                 ]
             , g
                 [ id "playerGroup"
@@ -136,6 +147,7 @@ view maybeModel =
                 [ g [ transform [ Translate 0 1 ] ] [ viewAvatar model.currentAvatar ]
                 , g [ transform [ Translate 1 0 ] ] (viewCards model.beingPlayed model.hand)
                 ]
+            , g [ id "deck" ] []
             ]
                 |> svg
                     [ viewBox -border -border (w + border * 2) (h + border * 2)
@@ -144,31 +156,89 @@ view maybeModel =
                     ]
 
 
-colorFromHex : String -> Color
-colorFromHex hex =
+viewOpponentCards : List (Card Player) -> List (Card Opponent) -> Svg msg
+viewOpponentCards beingPlayed opponentHand =
     let
-        r : String
-        r =
-            String.slice 0 2 hex
+        moveDown : Bool
+        moveDown =
+            List.length beingPlayed == 10
 
-        g : String
-        g =
-            String.slice 2 4 hex
+        shuffled : List (Card Opponent)
+        shuffled =
+            if moveDown then
+                opponentHand
+                    |> List.Extra.permutations
+                    |> List.Extra.maximumBy (opponentScore beingPlayed)
+                    |> Maybe.withDefault opponentHand
 
-        b : String
-        b =
-            String.slice 4 6 hex
-
-        i : String -> Int
-        i v =
-            v
-                |> Hex.fromString
-                |> Result.withDefault 0
+            else
+                opponentHand
     in
-    Color.rgb255 (i r) (i g) (i b)
+    opponentHand
+        |> List.map
+            (\card ->
+                viewOpponentCard
+                    (List.Extra.elemIndex card shuffled |> Maybe.withDefault 0)
+                    moveDown
+                    card
+            )
+        |> g [ id "opponentCards" ]
 
 
-viewCards : List Int -> List Int -> List (Svg Msg)
+opponentScore : List (Card Player) -> List (Card Opponent) -> Int
+opponentScore playerHand opponentHand =
+    20 - playerScore playerHand opponentHand
+
+
+playerScore : List (Card Player) -> List (Card Opponent) -> Int
+playerScore playerHand opponentHand =
+    List.map2
+        (\(Card playerCard) (Card opponentCard) ->
+            case compare playerCard opponentCard of
+                LT ->
+                    0
+
+                EQ ->
+                    1
+
+                GT ->
+                    2
+        )
+        playerHand
+        opponentHand
+        |> List.sum
+
+
+viewOpponentCard : Int -> Bool -> Card Opponent -> Svg msg
+viewOpponentCard cardIndex moveDown (Card c) =
+    g
+        [ class [ "card" ]
+        , transform
+            [ Translate (toFloat cardIndex * 0.7)
+                (if moveDown then
+                    1
+
+                 else
+                    0
+                )
+            ]
+        , style "transition: all 0.4s ease-in-out"
+        ]
+        [ rect
+            [ x 0.1
+            , y 0.1
+            , width 0.5
+            , height 0.8
+            , rx 0.2
+            , fill (Paint Color.gray)
+            , stroke (Paint Color.black)
+            ]
+            []
+        , text_ [ x 0.2, y 0.6 ] [ text (String.fromInt c) ]
+        ]
+
+
+viewCards : List (Card Player) -> List (Card Player) -> List (Svg Msg)
 viewCards beingPlayed cards =
     cards
         |> List.foldl
@@ -218,8 +288,8 @@ viewCards beingPlayed cards =
         |> Tuple.second
 
 
-viewCard : List (Attribute msg) -> { x : Float, y : Float } -> Int -> Svg msg
-viewCard attrs coord c =
+viewCard : List (Attribute msg) -> { x : Float, y : Float } -> Card Player -> Svg msg
+viewCard attrs coord (Card c) =
     g
         (class [ "card" ]
             :: transform [ Translate coord.x coord.y ]

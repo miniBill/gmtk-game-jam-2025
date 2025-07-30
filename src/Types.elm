@@ -1,10 +1,26 @@
-module Types exposing (Character(..), Flags, colorToString, next, previous)
+module Types exposing (Card(..), Character(..), Deck, Flags, Opponent, Player, colorToString, next, previous)
 
 import Avataaars.Graphics exposing (Graphics(..))
 
 
 type alias Flags =
     {}
+
+
+type Card kind
+    = Card Int
+
+
+type Deck
+    = Deck
+
+
+type Player
+    = Player
+
+
+type Opponent
+    = Opponent
 
 
 type Character
