@@ -47,10 +47,8 @@ type Model
         }
     | PlayedHand
         { currentAvatar : ( Character, Graphics )
-        , opponentHand : List (Card Opponent)
+        , play : List ( Card Player, Card Opponent )
         , deck : List ( Card Player, Card Opponent )
-        , hand : List (Card Player)
-        , beingPlayed : List (Card Player)
         , mainSeed : Random.Seed
         }
 
@@ -147,15 +145,16 @@ update msg model =
         ( SubmitHand, PreparingHand preparingModel ) ->
             if List.length preparingModel.beingPlayed == handSize then
                 ( PlayedHand
-                    { beingPlayed = preparingModel.beingPlayed
-                    , currentAvatar = preparingModel.currentAvatar
+                    { currentAvatar = preparingModel.currentAvatar
                     , deck = preparingModel.deck
-                    , hand = preparingModel.hand
-                    , opponentHand =
-                        calculateBestHand
-                            preparingModel.mainSeed
+                    , play =
+                        List.map2 Tuple.pair
                             preparingModel.beingPlayed
-                            preparingModel.opponentHand
+                            (calculateBestHand
+                                preparingModel.mainSeed
+                                preparingModel.beingPlayed
+                                preparingModel.opponentHand
+                            )
                     , mainSeed = preparingModel.mainSeed
                     }
                 , Cmd.none
@@ -204,7 +203,7 @@ view model =
                     [ backgroundRect
                     , g [ id "opponentGroup" ]
                         [ viewAvatar (Types.previous preparingModel.currentAvatar)
-                        , g [ transform [ Translate 1 0 ] ] [ viewOpponentCards { faceUp = False } preparingModel.mainSeed preparingModel.beingPlayed preparingModel.opponentHand ]
+                        , g [ transform [ Translate 1 0 ] ] [ viewOpponentCards { faceUp = False } preparingModel.mainSeed (Just preparingModel.beingPlayed) preparingModel.opponentHand ]
                         , g [ transform [ Translate 0 1 ] ] [ viewDeck (List.map Tuple.second preparingModel.deck) ]
                         ]
                     , g
@@ -215,7 +214,7 @@ view model =
                         List.filterMap identity
                             [ Just <| viewDeck (List.map Tuple.first preparingModel.deck)
                             , Just <| g [ transform [ Translate 0 1 ] ] [ viewAvatar preparingModel.currentAvatar ]
-                            , Just <| g [ transform [ Translate 1 0 ] ] (viewCards preparingModel.beingPlayed preparingModel.hand)
+                            , Just <| g [ transform [ Translate 1 0 ] ] (viewCards preparingModel.beingPlayed (Just preparingModel.hand))
                             , if List.length preparingModel.beingPlayed == handSize then
                                 Just <| g [ transform [ Translate 1 1 ] ] [ submitHandButton ]
 
@@ -225,17 +224,23 @@ view model =
                     ]
 
                 PlayedHand playedModel ->
+                    let
+                        ( beingPlayed, opponentHand ) =
+                            List.unzip playedModel.play
+                    in
                     [ backgroundRect
                     , g [ id "opponentGroup" ]
                         [ viewAvatar (Types.previous playedModel.currentAvatar)
-                        , g [ transform [ Translate 1 0 ] ] [ viewOpponentCards { faceUp = True } playedModel.mainSeed playedModel.beingPlayed playedModel.opponentHand ]
+                        , g [ transform [ Translate 1 0 ] ] [ viewOpponentCards { faceUp = True } playedModel.mainSeed Nothing opponentHand ]
+                        , g [ transform [ Translate 0 1 ] ] [ viewDeck (List.map Tuple.second playedModel.deck) ]
                         ]
                     , g
                         [ id "playerGroup"
                         , transform [ Translate 0 2 ]
                         ]
-                        [ g [ transform [ Translate 0 1 ] ] [ viewAvatar playedModel.currentAvatar ]
-                        , g [ transform [ Translate 1 0 ] ] (viewCards playedModel.beingPlayed playedModel.hand)
+                        [ viewDeck (List.map Tuple.first playedModel.deck)
+                        , g [ transform [ Translate 0 1 ] ] [ viewAvatar playedModel.currentAvatar ]
+                        , g [ transform [ Translate 1 0 ] ] (viewCards beingPlayed Nothing)
                         ]
                     ]
     in
@@ -290,17 +295,27 @@ submitHandButton =
         ]
 
 
-viewOpponentCards : { faceUp : Bool } -> Random.Seed -> List (Card Player) -> List (Card Opponent) -> Svg msg
-viewOpponentCards { faceUp } seed beingPlayed opponentHand =
+viewOpponentCards : { faceUp : Bool } -> Random.Seed -> Maybe (List (Card Player)) -> List (Card Opponent) -> Svg msg
+viewOpponentCards { faceUp } seed maybeBeingPlayed opponentHand =
     let
         moveDown : Bool
         moveDown =
-            List.length beingPlayed == handSize
+            case maybeBeingPlayed of
+                Nothing ->
+                    True
+
+                Just beingPlayed ->
+                    List.length beingPlayed == handSize
 
         bestHand : List (Card Opponent)
         bestHand =
             if moveDown && not faceUp then
-                calculateBestHand seed beingPlayed opponentHand
+                case maybeBeingPlayed of
+                    Nothing ->
+                        opponentHand
+
+                    Just beingPlayed ->
+                        calculateBestHand seed beingPlayed opponentHand
 
             else
                 opponentHand
@@ -321,7 +336,7 @@ viewOpponentCards { faceUp } seed beingPlayed opponentHand =
                         else
                             0
                     , card = card
-                    , faceUp = False
+                    , faceUp = faceUp
                     }
             )
         |> g [ id "opponentCards" ]
@@ -420,9 +435,9 @@ playerScore playerHand opponentHand =
         |> List.sum
 
 
-viewCards : List (Card Player) -> List (Card Player) -> List (Svg Msg)
+viewCards : List (Card Player) -> Maybe (List (Card Player)) -> List (Svg Msg)
 viewCards beingPlayed cards =
-    cards
+    (cards |> Maybe.withDefault beingPlayed)
         |> List.foldl
             (\card ( handX, acc ) ->
                 let
@@ -433,15 +448,20 @@ viewCards beingPlayed cards =
                     cardView : Svg Msg
                     cardView =
                         viewCard
-                            [ onClick
-                                (if inHand then
-                                    Play card
+                            (if cards == Nothing then
+                                []
 
-                                 else
-                                    Unplay card
-                                )
-                            , cursor CursorPointer
-                            ]
+                             else
+                                [ onClick
+                                    (if inHand then
+                                        Play card
+
+                                     else
+                                        Unplay card
+                                    )
+                                , cursor CursorPointer
+                                ]
+                            )
                             (if inHand then
                                 { x = handX
                                 , y = 1
