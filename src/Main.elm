@@ -16,7 +16,7 @@ import TypedSvg.Attributes.InPx exposing (fontSize, height, rx, strokeWidth, wid
 import TypedSvg.Core exposing (Attribute, Svg, text)
 import TypedSvg.Events exposing (onClick)
 import TypedSvg.Types exposing (AnchorAlignment(..), Cursor(..), DominantBaseline(..), Paint(..), Transform(..))
-import Types exposing (Card(..), Character(..), Deck, Flags, Opponent, Player)
+import Types exposing (Card(..), Character(..), Flags, Opponent, Player)
 
 
 handSize : number
@@ -27,7 +27,7 @@ handSize =
 type alias Model =
     { currentAvatar : ( Character, Graphics )
     , opponentHand : List (Card Opponent)
-    , deck : List (Card Deck)
+    , deck : List ( Card Player, Card Opponent )
     , hand : List (Card Player)
     , beingPlayed : List (Card Player)
     , mainSeed : Random.Seed
@@ -70,22 +70,28 @@ update msg maybeModel =
             let
                 ( initialDeck, seed ) =
                     Random.step
-                        (List.range 1 100
-                            |> Random.List.shuffle
+                        (let
+                            oneDeck : Random.Generator (List (Card kind))
+                            oneDeck =
+                                List.range 1 100
+                                    |> List.map Card
+                                    |> Random.List.shuffle
+                         in
+                         Random.map2 (List.map2 Tuple.pair) oneDeck oneDeck
                         )
                         generatedSeed
 
-                ( hand, ( opponentHand, deck ) ) =
+                ( ( hand, opponentHand ), deck ) =
                     List.Extra.splitAt handSize initialDeck
-                        |> Tuple.mapSecond (List.Extra.splitAt handSize)
+                        |> Tuple.mapFirst List.unzip
 
                 newModel : Model
                 newModel =
                     { currentAvatar = ( Karkat, Skull )
-                    , hand = List.map Card (List.sort hand)
+                    , hand = List.sortBy (\(Card c) -> c) hand
                     , beingPlayed = []
-                    , opponentHand = List.map Card (List.sort opponentHand)
-                    , deck = List.map Card deck
+                    , opponentHand = List.sortBy (\(Card c) -> c) opponentHand
+                    , deck = deck
                     , mainSeed = seed
                     }
             in
