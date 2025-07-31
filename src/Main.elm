@@ -4,7 +4,7 @@ import Avataaars
 import Avataaars.Graphics exposing (Graphics(..))
 import Avatars
 import Browser
-import Color
+import Color exposing (Color)
 import Color.Extra exposing (colorFromHex)
 import Color.Oklch as Oklch
 import List.Extra
@@ -24,14 +24,24 @@ handSize =
     7
 
 
-type alias Model =
-    { currentAvatar : ( Character, Graphics )
-    , opponentHand : List (Card Opponent)
-    , deck : List ( Card Player, Card Opponent )
-    , hand : List (Card Player)
-    , beingPlayed : List (Card Player)
-    , mainSeed : Random.Seed
-    }
+type Model
+    = GeneratingSeed
+    | PreparingHand
+        { currentAvatar : ( Character, Graphics )
+        , opponentHand : List (Card Opponent)
+        , deck : List ( Card Player, Card Opponent )
+        , hand : List (Card Player)
+        , beingPlayed : List (Card Player)
+        , mainSeed : Random.Seed
+        }
+    | PlayedHand
+        { currentAvatar : ( Character, Graphics )
+        , opponentHand : List (Card Opponent)
+        , deck : List ( Card Player, Card Opponent )
+        , hand : List (Card Player)
+        , beingPlayed : List (Card Player)
+        , mainSeed : Random.Seed
+        }
 
 
 type Msg
@@ -40,7 +50,7 @@ type Msg
     | Unplay (Card Player)
 
 
-main : Program Flags (Maybe Model) Msg
+main : Program Flags Model Msg
 main =
     Browser.element
         { init = init
@@ -50,9 +60,9 @@ main =
         }
 
 
-init : flags -> ( Maybe Model, Cmd Msg )
+init : flags -> ( Model, Cmd Msg )
 init _ =
-    ( Nothing
+    ( GeneratingSeed
     , let
         _ =
             Debug.todo
@@ -63,10 +73,10 @@ init _ =
     )
 
 
-update : Msg -> Maybe Model -> ( Maybe Model, Cmd msg )
-update msg maybeModel =
-    case ( msg, maybeModel ) of
-        ( GeneratedSeed generatedSeed, _ ) ->
+update : Msg -> Model -> ( Model, Cmd msg )
+update msg model =
+    case ( msg, model ) of
+        ( GeneratedSeed generatedSeed, GeneratingSeed ) ->
             let
                 ( initialDeck, seed ) =
                     Random.step
@@ -94,38 +104,45 @@ update msg maybeModel =
                     , deck = deck
                     , mainSeed = seed
                     }
+                        |> PreparingHand
             in
-            ( Just newModel
+            ( newModel
             , Cmd.none
             )
 
-        ( _, Nothing ) ->
-            ( maybeModel, Cmd.none )
+        ( _, GeneratingSeed ) ->
+            ( model, Cmd.none )
 
-        ( Play i, Just model ) ->
-            ( { model
-                | beingPlayed = model.beingPlayed ++ [ i ]
+        ( GeneratedSeed newSeed, _ ) ->
+            ( model, Cmd.none )
+
+        ( Play i, PreparingHand preparingModel ) ->
+            ( { preparingModel
+                | beingPlayed = preparingModel.beingPlayed ++ [ i ]
               }
-                |> Just
+                |> PreparingHand
             , Cmd.none
             )
 
-        ( Unplay i, Just model ) ->
-            ( { model
-                | beingPlayed = List.Extra.remove i model.beingPlayed
+        ( Unplay i, PreparingHand preparingModel ) ->
+            ( { preparingModel
+                | beingPlayed = List.Extra.remove i preparingModel.beingPlayed
               }
-                |> Just
+                |> PreparingHand
             , Cmd.none
             )
 
+        ( _, PlayedHand playedModel ) ->
+            ( model, Cmd.none )
 
-view : Maybe Model -> TypedSvg.Core.Svg Msg
-view maybeModel =
-    case maybeModel of
-        Nothing ->
+
+view : Model -> TypedSvg.Core.Svg Msg
+view model =
+    case model of
+        GeneratingSeed ->
             text "Loading..."
 
-        Just model ->
+        PreparingHand preparingModel ->
             let
                 border : Float
                 border =
@@ -148,15 +165,57 @@ view maybeModel =
                 ]
                 []
             , g [ id "opponentGroup" ]
-                [ viewAvatar (Types.previous model.currentAvatar)
-                , g [ transform [ Translate 1 0 ] ] [ viewOpponentCards model.mainSeed model.beingPlayed model.opponentHand ]
+                [ viewAvatar (Types.previous preparingModel.currentAvatar)
+                , g [ transform [ Translate 1 0 ] ] [ viewOpponentCards { faceUp = False } preparingModel.mainSeed preparingModel.beingPlayed preparingModel.opponentHand ]
                 ]
             , g
                 [ id "playerGroup"
                 , transform [ Translate 0 2 ]
                 ]
-                [ g [ transform [ Translate 0 1 ] ] [ viewAvatar model.currentAvatar ]
-                , g [ transform [ Translate 1 0 ] ] (viewCards model.beingPlayed model.hand)
+                [ g [ transform [ Translate 0 1 ] ] [ viewAvatar preparingModel.currentAvatar ]
+                , g [ transform [ Translate 1 0 ] ] (viewCards preparingModel.beingPlayed preparingModel.hand)
+                ]
+            , g [ id "deck", transform [ Translate 0 2 ] ]
+                []
+            ]
+                |> svg
+                    [ viewBox -border -border (w + border * 2) (h + border * 2)
+                    , strokeWidth 0.05
+                    , fontSize 0.25
+                    ]
+
+        PlayedHand playedModel ->
+            let
+                border : Float
+                border =
+                    0.1
+
+                w : number
+                w =
+                    6
+
+                h : number
+                h =
+                    4
+            in
+            [ rect
+                [ x -border
+                , y -border
+                , width (w + border * 2)
+                , height (h + border * 2)
+                , fill (Paint (colorFromHex "#234000"))
+                ]
+                []
+            , g [ id "opponentGroup" ]
+                [ viewAvatar (Types.previous playedModel.currentAvatar)
+                , g [ transform [ Translate 1 0 ] ] [ viewOpponentCards { faceUp = True } playedModel.mainSeed playedModel.beingPlayed playedModel.opponentHand ]
+                ]
+            , g
+                [ id "playerGroup"
+                , transform [ Translate 0 2 ]
+                ]
+                [ g [ transform [ Translate 0 1 ] ] [ viewAvatar playedModel.currentAvatar ]
+                , g [ transform [ Translate 1 0 ] ] (viewCards playedModel.beingPlayed playedModel.hand)
                 ]
             , g [ id "deck", transform [ Translate 0 2 ] ]
                 []
@@ -168,21 +227,17 @@ view maybeModel =
                     ]
 
 
-viewOpponentCards : Random.Seed -> List (Card Player) -> List (Card Opponent) -> Svg msg
-viewOpponentCards seed beingPlayed opponentHand =
+viewOpponentCards : { faceUp : Bool } -> Random.Seed -> List (Card Player) -> List (Card Opponent) -> Svg msg
+viewOpponentCards { faceUp } seed beingPlayed opponentHand =
     let
         moveDown : Bool
         moveDown =
             List.length beingPlayed == handSize
 
-        shuffled : List (Card Opponent)
-        shuffled =
-            if moveDown then
-                opponentHand
-                    |> shuffle seed
-                    |> List.Extra.permutations
-                    |> List.Extra.minimumBy (opponentScore beingPlayed)
-                    |> Maybe.withDefault opponentHand
+        bestHand : List (Card Opponent)
+        bestHand =
+            if moveDown && not faceUp then
+                calculateBestHand seed beingPlayed opponentHand
 
             else
                 opponentHand
@@ -192,7 +247,7 @@ viewOpponentCards seed beingPlayed opponentHand =
             (\card ->
                 viewCard []
                     { x =
-                        List.Extra.elemIndex card shuffled
+                        List.Extra.elemIndex card bestHand
                             |> Maybe.withDefault 0
                             |> toFloat
                             |> (*) 0.7
@@ -204,9 +259,71 @@ viewOpponentCards seed beingPlayed opponentHand =
                             0
                     , card = card
                     , faceUp = False
+                    , opponent = True
                     }
             )
         |> g [ id "opponentCards" ]
+
+
+calculateBestHand : Random.Seed -> List (Card Player) -> List (Card Opponent) -> List (Card Opponent)
+calculateBestHand seed beingPlayed opponentHand =
+    opponentHand
+        |> shuffle seed
+        |> permutations
+        |> minimumBy (opponentScore beingPlayed)
+        |> Maybe.withDefault opponentHand
+
+
+permutations : List a -> List (List a)
+permutations xs_ =
+    case xs_ of
+        [] ->
+            [ [] ]
+
+        xs ->
+            let
+                f : ( a, List a ) -> List (List a)
+                f ( y, ys ) =
+                    List.map ((::) y) (permutations ys)
+            in
+            List.concatMap f (select xs)
+
+
+select : List a -> List ( a, List a )
+select list =
+    case list of
+        [] ->
+            []
+
+        x :: xs ->
+            ( x, xs ) :: List.map (\( y, ys ) -> ( y, x :: ys )) (select xs)
+
+
+minimumBy : (a -> comparable) -> List a -> Maybe a
+minimumBy f ls =
+    let
+        minBy : a -> ( a, comparable ) -> ( a, comparable )
+        minBy x (( _, fy ) as min) =
+            let
+                fx : comparable
+                fx =
+                    f x
+            in
+            if fx < fy then
+                ( x, fx )
+
+            else
+                min
+    in
+    case ls of
+        [ l_ ] ->
+            Just l_
+
+        l_ :: ls_ ->
+            Just <| Tuple.first <| List.foldl minBy ( l_, f l_ ) ls_
+
+        _ ->
+            Nothing
 
 
 shuffle : Random.Seed -> List a -> List a
@@ -268,6 +385,7 @@ viewCards beingPlayed cards =
                                 , y = 1
                                 , faceUp = True
                                 , card = card
+                                , opponent = False
                                 }
 
                              else
@@ -279,6 +397,7 @@ viewCards beingPlayed cards =
                                 , y = 0
                                 , faceUp = True
                                 , card = card
+                                , opponent = False
                                 }
                             )
                 in
@@ -301,9 +420,49 @@ viewCard :
         , y : Float
         , faceUp : Bool
         , card : Card kind
+        , opponent : Bool
         }
     -> Svg msg
 viewCard attrs config =
+    let
+        (Card c) =
+            config.card
+
+        cardRect : Svg msg
+        cardRect =
+            let
+                border : Color
+                border =
+                    if config.opponent then
+                        Color.white
+
+                    else
+                        Color.black
+
+                cardBackground : Color
+                cardBackground =
+                    if config.faceUp then
+                        Oklch.toColor
+                            { alpha = 1
+                            , lightness = 0.85
+                            , chroma = 0.07
+                            , hue = (toFloat c - 1) / 100
+                            }
+
+                    else
+                        Color.darkGreen
+            in
+            rect
+                [ x 0.1
+                , y 0.1
+                , width 0.5
+                , height 0.8
+                , rx 0.2
+                , fill (Paint cardBackground)
+                , stroke (Paint border)
+                ]
+                []
+    in
     g
         (class [ "card" ]
             :: transform [ Translate config.x config.y ]
@@ -311,29 +470,7 @@ viewCard attrs config =
             :: attrs
         )
         (if config.faceUp then
-            let
-                (Card c) =
-                    config.card
-            in
-            [ rect
-                [ x 0.1
-                , y 0.1
-                , width 0.5
-                , height 0.8
-                , rx 0.2
-                , fill
-                    (Paint
-                        (Oklch.toColor
-                            { alpha = 1
-                            , lightness = 0.85
-                            , chroma = 0.07
-                            , hue = (toFloat c - 1) / 100
-                            }
-                        )
-                    )
-                , stroke (Paint Color.black)
-                ]
-                []
+            [ cardRect
             , text_
                 [ x 0.35
                 , y 0.5
@@ -345,22 +482,10 @@ viewCard attrs config =
             ]
 
          else
-            [ rect
-                [ x 0.1
-                , y 0.1
-                , width 0.5
-                , height 0.8
-                , rx 0.2
-                , fill (Paint Color.darkGreen)
-                , stroke (Paint Color.black)
-                ]
-                []
+            [ cardRect
             , let
                 _ =
                     Debug.todo
-
-                (Card c) =
-                    config.card
               in
               text_
                 [ x 0.35
