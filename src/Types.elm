@@ -1,4 +1,4 @@
-module Types exposing (Card(..), Character(..), Flags, Opponent, Player, colorToString, next, previous)
+module Types exposing (Card, Character(..), Flags, Opponent, Player, cardValue, colorToString, isOpponentCard, next, opponentCard, playerCard, previous)
 
 import Avataaars.Graphics exposing (Graphics(..))
 
@@ -7,8 +7,28 @@ type alias Flags =
     {}
 
 
+playerCard : Int -> Card Player
+playerCard c =
+    Card { opponent = False } c
+
+
+opponentCard : Int -> Card Opponent
+opponentCard c =
+    Card { opponent = True } c
+
+
+cardValue : Card kind -> Int
+cardValue (Card _ c) =
+    c
+
+
+isOpponentCard : Card kind -> Bool
+isOpponentCard (Card { opponent } _) =
+    opponent
+
+
 type Card kind
-    = Card Int
+    = Card { opponent : Bool } Int
 
 
 type Player

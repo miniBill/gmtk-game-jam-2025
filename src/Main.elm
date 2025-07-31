@@ -11,17 +11,28 @@ import List.Extra
 import Random
 import Random.List
 import TypedSvg exposing (g, rect, svg, text_)
-import TypedSvg.Attributes exposing (class, cursor, dominantBaseline, fill, id, stroke, style, textAnchor, transform, viewBox)
+import TypedSvg.Attributes exposing (class, cursor, fill, id, stroke, style, transform, viewBox)
 import TypedSvg.Attributes.InPx exposing (fontSize, height, rx, strokeWidth, width, x, y)
 import TypedSvg.Core exposing (Attribute, Svg, text)
 import TypedSvg.Events exposing (onClick)
-import TypedSvg.Types exposing (AnchorAlignment(..), Cursor(..), DominantBaseline(..), Paint(..), Transform(..))
-import Types exposing (Card(..), Character(..), Flags, Opponent, Player)
+import TypedSvg.Extra exposing (centeredText)
+import TypedSvg.Types exposing (Cursor(..), Paint(..), Transform(..))
+import Types exposing (Card, Character(..), Flags, Opponent, Player, opponentCard, playerCard)
 
 
 handSize : number
 handSize =
     7
+
+
+cardWidth : Float
+cardWidth =
+    0.5
+
+
+cardHeight : Float
+cardHeight =
+    0.8
 
 
 type Model
@@ -81,13 +92,13 @@ update msg model =
                 ( initialDeck, seed ) =
                     Random.step
                         (let
-                            oneDeck : Random.Generator (List (Card kind))
-                            oneDeck =
+                            oneDeck : (Int -> Card kind) -> Random.Generator (List (Card kind))
+                            oneDeck f =
                                 List.range 1 100
-                                    |> List.map Card
+                                    |> List.map f
                                     |> Random.List.shuffle
                          in
-                         Random.map2 (List.map2 Tuple.pair) oneDeck oneDeck
+                         Random.map2 (List.map2 Tuple.pair) (oneDeck playerCard) (oneDeck opponentCard)
                         )
                         generatedSeed
 
@@ -98,9 +109,9 @@ update msg model =
                 newModel : Model
                 newModel =
                     { currentAvatar = ( Karkat, Skull )
-                    , hand = List.sortBy (\(Card c) -> c) hand
+                    , hand = List.sortBy Types.cardValue hand
                     , beingPlayed = []
-                    , opponentHand = List.sortBy (\(Card c) -> c) opponentHand
+                    , opponentHand = List.sortBy Types.cardValue opponentHand
                     , deck = deck
                     , mainSeed = seed
                     }
@@ -138,25 +149,22 @@ update msg model =
 
 view : Model -> TypedSvg.Core.Svg Msg
 view model =
-    case model of
-        GeneratingSeed ->
-            text "Loading..."
+    let
+        border : Float
+        border =
+            0.1
 
-        PreparingHand preparingModel ->
-            let
-                border : Float
-                border =
-                    0.1
+        w : number
+        w =
+            6
 
-                w : number
-                w =
-                    6
+        h : number
+        h =
+            4
 
-                h : number
-                h =
-                    4
-            in
-            [ rect
+        backgroundRect : Svg msg
+        backgroundRect =
+            rect
                 [ x -border
                 , y -border
                 , width (w + border * 2)
@@ -164,67 +172,96 @@ view model =
                 , fill (Paint (colorFromHex "#234000"))
                 ]
                 []
-            , g [ id "opponentGroup" ]
-                [ viewAvatar (Types.previous preparingModel.currentAvatar)
-                , g [ transform [ Translate 1 0 ] ] [ viewOpponentCards { faceUp = False } preparingModel.mainSeed preparingModel.beingPlayed preparingModel.opponentHand ]
-                ]
-            , g
-                [ id "playerGroup"
-                , transform [ Translate 0 2 ]
-                ]
-                [ g [ transform [ Translate 0 1 ] ] [ viewAvatar preparingModel.currentAvatar ]
-                , g [ transform [ Translate 1 0 ] ] (viewCards preparingModel.beingPlayed preparingModel.hand)
-                ]
-            , g [ id "deck", transform [ Translate 0 2 ] ]
-                []
-            ]
-                |> svg
-                    [ viewBox -border -border (w + border * 2) (h + border * 2)
-                    , strokeWidth 0.05
-                    , fontSize 0.25
+
+        children : List (Svg Msg)
+        children =
+            case model of
+                GeneratingSeed ->
+                    [ text "Loading..." ]
+
+                PreparingHand preparingModel ->
+                    [ backgroundRect
+                    , g [ id "opponentGroup" ]
+                        [ viewAvatar (Types.previous preparingModel.currentAvatar)
+                        , g [ transform [ Translate 1 0 ] ] [ viewOpponentCards { faceUp = False } preparingModel.mainSeed preparingModel.beingPlayed preparingModel.opponentHand ]
+                        , g [ transform [ Translate 0 1 ] ] [ viewDeck (List.map Tuple.second preparingModel.deck) ]
+                        ]
+                    , g
+                        [ id "playerGroup"
+                        , transform [ Translate 0 2 ]
+                        ]
+                      <|
+                        List.filterMap identity
+                            [ Just <| viewDeck (List.map Tuple.first preparingModel.deck)
+                            , Just <| g [ transform [ Translate 0 1 ] ] [ viewAvatar preparingModel.currentAvatar ]
+                            , Just <| g [ transform [ Translate 1 0 ] ] (viewCards preparingModel.beingPlayed preparingModel.hand)
+                            , if List.length preparingModel.beingPlayed == handSize then
+                                Just <| g [ transform [ Translate 1 1 ] ] [ submitHandButton ]
+
+                              else
+                                Nothing
+                            ]
                     ]
 
-        PlayedHand playedModel ->
-            let
-                border : Float
-                border =
-                    0.1
-
-                w : number
-                w =
-                    6
-
-                h : number
-                h =
-                    4
-            in
-            [ rect
-                [ x -border
-                , y -border
-                , width (w + border * 2)
-                , height (h + border * 2)
-                , fill (Paint (colorFromHex "#234000"))
-                ]
-                []
-            , g [ id "opponentGroup" ]
-                [ viewAvatar (Types.previous playedModel.currentAvatar)
-                , g [ transform [ Translate 1 0 ] ] [ viewOpponentCards { faceUp = True } playedModel.mainSeed playedModel.beingPlayed playedModel.opponentHand ]
-                ]
-            , g
-                [ id "playerGroup"
-                , transform [ Translate 0 2 ]
-                ]
-                [ g [ transform [ Translate 0 1 ] ] [ viewAvatar playedModel.currentAvatar ]
-                , g [ transform [ Translate 1 0 ] ] (viewCards playedModel.beingPlayed playedModel.hand)
-                ]
-            , g [ id "deck", transform [ Translate 0 2 ] ]
-                []
-            ]
-                |> svg
-                    [ viewBox -border -border (w + border * 2) (h + border * 2)
-                    , strokeWidth 0.05
-                    , fontSize 0.25
+                PlayedHand playedModel ->
+                    [ backgroundRect
+                    , g [ id "opponentGroup" ]
+                        [ viewAvatar (Types.previous playedModel.currentAvatar)
+                        , g [ transform [ Translate 1 0 ] ] [ viewOpponentCards { faceUp = True } playedModel.mainSeed playedModel.beingPlayed playedModel.opponentHand ]
+                        ]
+                    , g
+                        [ id "playerGroup"
+                        , transform [ Translate 0 2 ]
+                        ]
+                        [ g [ transform [ Translate 0 1 ] ] [ viewAvatar playedModel.currentAvatar ]
+                        , g [ transform [ Translate 1 0 ] ] (viewCards playedModel.beingPlayed playedModel.hand)
+                        ]
                     ]
+    in
+    svg
+        [ viewBox -border -border (w + border * 2) (h + border * 2)
+        , strokeWidth 0.05
+        , fontSize 0.25
+        ]
+        children
+
+
+viewDeck : List (Card kind) -> Svg Msg
+viewDeck deck =
+    deck
+        |> List.reverse
+        |> List.indexedMap
+            (\i c ->
+                viewCard []
+                    { x = 0.3 - toFloat i / 250
+                    , y = 0
+                    , card = c
+                    , faceUp = False
+                    }
+            )
+        |> g [ class [ "deck" ] ]
+
+
+submitHandButton : Svg Msg
+submitHandButton =
+    g []
+        [ rect
+            [ x 0.1
+            , y 0.1
+            , width ((cardWidth + 0.2) * handSize - 0.2)
+            , height cardHeight
+            , fill (Paint Color.orange)
+            , rx 0.2
+            , style
+                (String.join "; "
+                    [ "transition: all 0.4s ease-in-out"
+                    , "filter: drop-shadow(0.01px 0.02px 0.02px rgb(0 0 0 / 0.4))"
+                    ]
+                )
+            ]
+            []
+        , text_ [] [ text "TODO" ]
+        ]
 
 
 viewOpponentCards : { faceUp : Bool } -> Random.Seed -> List (Card Player) -> List (Card Opponent) -> Svg msg
@@ -259,7 +296,6 @@ viewOpponentCards { faceUp } seed beingPlayed opponentHand =
                             0
                     , card = card
                     , faceUp = False
-                    , opponent = True
                     }
             )
         |> g [ id "opponentCards" ]
@@ -334,24 +370,24 @@ shuffle seed list =
         |> Tuple.first
 
 
-opponentScore : List (Card Player) -> List (Card Opponent) -> Int
+opponentScore : List (Card Player) -> List (Card Opponent) -> Float
 opponentScore playerHand opponentHand =
-    20 - playerScore playerHand opponentHand
+    handSize - playerScore playerHand opponentHand
 
 
-playerScore : List (Card Player) -> List (Card Opponent) -> Int
+playerScore : List (Card Player) -> List (Card Opponent) -> Float
 playerScore playerHand opponentHand =
     List.map2
-        (\(Card playerCard) (Card opponentCard) ->
-            case compare playerCard opponentCard of
+        (\playerCard opponentCard ->
+            case compare (Types.cardValue playerCard) (Types.cardValue opponentCard) of
                 LT ->
                     0
 
                 EQ ->
-                    1
+                    0.5
 
                 GT ->
-                    2
+                    1
         )
         playerHand
         opponentHand
@@ -385,7 +421,6 @@ viewCards beingPlayed cards =
                                 , y = 1
                                 , faceUp = True
                                 , card = card
-                                , opponent = False
                                 }
 
                              else
@@ -397,7 +432,6 @@ viewCards beingPlayed cards =
                                 , y = 0
                                 , faceUp = True
                                 , card = card
-                                , opponent = False
                                 }
                             )
                 in
@@ -420,24 +454,24 @@ viewCard :
         , y : Float
         , faceUp : Bool
         , card : Card kind
-        , opponent : Bool
         }
     -> Svg msg
 viewCard attrs config =
     let
-        (Card c) =
-            config.card
+        margin : Float
+        margin =
+            0.1
 
         cardRect : Svg msg
         cardRect =
             let
                 border : Color
                 border =
-                    if config.opponent then
+                    if Types.isOpponentCard config.card then
                         Color.white
 
                     else
-                        Color.black
+                        Color.darkGray
 
                 cardBackground : Color
                 cardBackground =
@@ -446,17 +480,17 @@ viewCard attrs config =
                             { alpha = 1
                             , lightness = 0.85
                             , chroma = 0.07
-                            , hue = (toFloat c - 1) / 100
+                            , hue = (toFloat (Types.cardValue config.card) - 1) / 100
                             }
 
                     else
                         Color.darkGreen
             in
             rect
-                [ x 0.1
-                , y 0.1
-                , width 0.5
-                , height 0.8
+                [ x margin
+                , y margin
+                , width cardWidth
+                , height cardHeight
                 , rx 0.2
                 , fill (Paint cardBackground)
                 , stroke (Paint border)
@@ -466,19 +500,22 @@ viewCard attrs config =
     g
         (class [ "card" ]
             :: transform [ Translate config.x config.y ]
-            :: style "transition: all 0.4s ease-in-out"
+            :: style
+                (String.join "; "
+                    [ "transition: all 0.4s ease-in-out"
+                    , "filter: drop-shadow(0.01px 0.02px 0.02px rgb(0 0 0 / 0.4))"
+                    ]
+                )
             :: attrs
         )
         (if config.faceUp then
             [ cardRect
-            , text_
-                [ x 0.35
-                , y 0.5
-                , textAnchor AnchorMiddle
-                , dominantBaseline DominantBaselineCentral
+            , centeredText
+                [ x (cardWidth / 2 + margin)
+                , y (cardHeight / 2 + margin)
                 , fill (Paint Color.black)
                 ]
-                [ text (String.fromInt c) ]
+                [ text (String.fromInt (Types.cardValue config.card)) ]
             ]
 
          else
@@ -487,14 +524,12 @@ viewCard attrs config =
                 _ =
                     Debug.todo
               in
-              text_
-                [ x 0.35
-                , y 0.5
-                , textAnchor AnchorMiddle
-                , dominantBaseline DominantBaselineCentral
+              centeredText
+                [ x (cardWidth / 2 + margin)
+                , y (cardHeight / 2 + margin)
                 , fill (Paint Color.green)
                 ]
-                [ text (String.fromInt c) ]
+                [ text (String.fromInt (Types.cardValue config.card)) ]
             ]
         )
 
