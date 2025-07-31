@@ -10,7 +10,7 @@ import Color.Oklch as Oklch
 import List.Extra
 import Random
 import Random.List
-import TypedSvg exposing (g, rect, svg, text_)
+import TypedSvg exposing (g, rect, svg)
 import TypedSvg.Attributes exposing (class, cursor, fill, id, stroke, style, transform, viewBox)
 import TypedSvg.Attributes.InPx exposing (fontSize, height, rx, strokeWidth, width, x, y)
 import TypedSvg.Core exposing (Attribute, Svg, text)
@@ -59,6 +59,7 @@ type Msg
     = GeneratedSeed Random.Seed
     | Play (Card Player)
     | Unplay (Card Player)
+    | SubmitHand
 
 
 main : Program Flags Model Msg
@@ -142,6 +143,26 @@ update msg model =
                 |> PreparingHand
             , Cmd.none
             )
+
+        ( SubmitHand, PreparingHand preparingModel ) ->
+            if List.length preparingModel.beingPlayed == handSize then
+                ( PlayedHand
+                    { beingPlayed = preparingModel.beingPlayed
+                    , currentAvatar = preparingModel.currentAvatar
+                    , deck = preparingModel.deck
+                    , hand = preparingModel.hand
+                    , opponentHand =
+                        calculateBestHand
+                            preparingModel.mainSeed
+                            preparingModel.beingPlayed
+                            preparingModel.opponentHand
+                    , mainSeed = preparingModel.mainSeed
+                    }
+                , Cmd.none
+                )
+
+            else
+                ( model, Cmd.none )
 
         ( _, PlayedHand playedModel ) ->
             ( model, Cmd.none )
@@ -260,7 +281,12 @@ submitHandButton =
                 )
             ]
             []
-        , text_ [] [ text "TODO" ]
+        , centeredText
+            [ x ((cardWidth + 0.2) * handSize / 2 - 0.1)
+            , y 0.5
+            , onClick SubmitHand
+            ]
+            [ text "Submit hand" ]
         ]
 
 
@@ -503,7 +529,7 @@ viewCard attrs config =
             :: style
                 (String.join "; "
                     [ "transition: all 0.4s ease-in-out"
-                    , "filter: drop-shadow(0.01px 0.02px 0.02px rgb(0 0 0 / 0.4))"
+                    , "filter: drop-shadow(0.01px 0.03px 0.02px rgb(0 0 0 / 0.4))"
                     ]
                 )
             :: attrs
