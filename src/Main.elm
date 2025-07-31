@@ -59,7 +59,8 @@ type Model
 
 
 type Game
-    = PreparingHand
+    = DrawingInitialHand
+    | PreparingHand
         { playerHand : List (Card Player)
         , playerChoices : List (Card Player)
         , opponentHand : List (Card Opponent)
@@ -123,10 +124,6 @@ update msg model =
                         )
                         generatedSeed
 
-                ( hand, opponentHand ) =
-                    List.take handSize initialDeck
-                        |> List.unzip
-
                 newModel : Model
                 newModel =
                     InGame
@@ -134,16 +131,11 @@ update msg model =
                         , initialDeck = initialDeck
                         , discardPile = []
                         , mainSeed = seed
-                        , game =
-                            { playerHand = List.sortBy Types.cardValue hand
-                            , playerChoices = []
-                            , opponentHand = List.sortBy Types.cardValue opponentHand
-                            }
-                                |> PreparingHand
+                        , game = DrawingInitialHand
                         }
             in
             ( newModel
-            , Cmd.none
+            , Process.sleep 2000 |> Task.perform (\_ -> GameMsg NextRound)
             )
 
         ( GameMsg gameMsg, InGame inGameModel ) ->
@@ -194,7 +186,11 @@ update msg model =
                           }
                             |> PlayedHand
                             |> stillInGame
-                        , Process.sleep 2000 |> Task.perform (\_ -> GameMsg NextRound)
+                        , let
+                            _ =
+                                Debug.todo
+                          in
+                          Process.sleep 50000 |> Task.perform (\_ -> GameMsg NextRound)
                         )
 
                     else
@@ -202,6 +198,25 @@ update msg model =
 
                 ( SubmitHand, _ ) ->
                     ( model, Cmd.none )
+
+                ( NextRound, DrawingInitialHand ) ->
+                    let
+                        ( playerHand, opponentHand ) =
+                            inGameModel.initialDeck
+                                |> List.take handSize
+                                |> List.unzip
+                    in
+                    ( InGame
+                        { inGameModel
+                            | game =
+                                { opponentHand = List.sortBy Types.cardValue opponentHand
+                                , playerHand = List.sortBy Types.cardValue playerHand
+                                , playerChoices = []
+                                }
+                                    |> PreparingHand
+                        }
+                    , Cmd.none
+                    )
 
                 ( NextRound, PlayedHand playedModel ) ->
                     let
@@ -250,17 +265,6 @@ view model =
         gameHeight =
             4
 
-        backgroundRect : Svg msg
-        backgroundRect =
-            rect
-                [ x -border
-                , y -border
-                , width (gameWidth + border * 2)
-                , height (gameHeight + border * 2)
-                , fill (Paint (colorFromHex "#234000"))
-                ]
-                []
-
         children : List (Svg Msg)
         children =
             case model of
@@ -268,57 +272,50 @@ view model =
                     [ text "Loading..." ]
 
                 InGame inGameModel ->
-                    case inGameModel.game of
-                        PreparingHand preparingModel ->
-                            [ backgroundRect
-                            , g [ id "opponentGroup" ]
-                                [ viewAvatar (Types.previous inGameModel.currentAvatar)
-                                , g [ transform [ Translate 6 0 ] ] (viewScore opponentScore inGameModel.discardPile Nothing)
+                    let
+                        backgroundRect : Svg msg
+                        backgroundRect =
+                            rect
+                                [ x -border
+                                , y -border
+                                , width (gameWidth + border * 2)
+                                , height (gameHeight + border * 2)
+                                , fill (Paint (colorFromHex "#234000"))
                                 ]
-                            , g
-                                [ id "playerGroup"
-                                , transform [ Translate 0 2 ]
-                                ]
-                              <|
-                                List.filterMap identity
-                                    [ Just <| g [ transform [ Translate 0 1 ] ] [ viewAvatar inGameModel.currentAvatar ]
-                                    , Just <| g [ transform [ Translate 6 1 ] ] (viewScore playerScore inGameModel.discardPile Nothing)
-                                    , submitHandButton preparingModel
+                                []
+                    in
+                    backgroundRect
+                        :: viewAvatar (Types.previous inGameModel.currentAvatar)
+                        :: g [ transform [ Translate 0 3 ] ] [ viewAvatar inGameModel.currentAvatar ]
+                        :: (case inGameModel.game of
+                                DrawingInitialHand ->
+                                    [ g [ transform [ Translate 6 0 ] ] (viewScore opponentScore inGameModel.discardPile Nothing)
+                                    , g [ transform [ Translate 6 3 ] ] (viewScore playerScore inGameModel.discardPile Nothing)
                                     ]
-                            , g [ id "cards" ] (viewCards model)
-                            ]
 
-                        PlayedHand playedModel ->
-                            [ backgroundRect
-                            , g [ id "opponentGroup" ]
-                                [ viewAvatar (Types.previous inGameModel.currentAvatar)
-                                , g [ transform [ Translate 6 0 ] ] (viewScore opponentScore inGameModel.discardPile (Just playedModel.play))
-                                ]
-                            , g
-                                [ id "playerGroup"
-                                , transform [ Translate 0 2 ]
-                                ]
-                                [ g [ transform [ Translate 0 1 ] ] [ viewAvatar inGameModel.currentAvatar ]
-                                , g [ transform [ Translate 6 1 ] ] (viewScore playerScore inGameModel.discardPile (Just playedModel.play))
-                                ]
-                            , g [ id "cards" ] (viewCards model)
-                            ]
+                                PreparingHand preparingModel ->
+                                    [ g [ transform [ Translate 6 0 ] ] (viewScore opponentScore inGameModel.discardPile Nothing)
+                                    , g
+                                        [ transform [ Translate 0 2 ]
+                                        ]
+                                      <|
+                                        List.filterMap identity
+                                            [ Just <| g [ transform [ Translate 6 1 ] ] (viewScore playerScore inGameModel.discardPile Nothing)
+                                            , submitHandButton preparingModel
+                                            ]
+                                    ]
 
-                        GameFinished ->
-                            [ backgroundRect
-                            , g [ id "opponentGroup" ]
-                                [ viewAvatar (Types.previous inGameModel.currentAvatar)
-                                , g [ transform [ Translate 6 0 ] ] (viewScore opponentScore inGameModel.discardPile Nothing)
-                                ]
-                            , g
-                                [ id "playerGroup"
-                                , transform [ Translate 0 2 ]
-                                ]
-                                [ g [ transform [ Translate 0 1 ] ] [ viewAvatar inGameModel.currentAvatar ]
-                                , g [ transform [ Translate 6 1 ] ] (viewScore playerScore inGameModel.discardPile Nothing)
-                                ]
-                            , g [ id "cards" ] (viewCards model)
-                            ]
+                                PlayedHand playedModel ->
+                                    [ g [ transform [ Translate 6 0 ] ] (viewScore opponentScore inGameModel.discardPile (Just playedModel.play))
+                                    , g [ transform [ Translate 6 3 ] ] (viewScore playerScore inGameModel.discardPile (Just playedModel.play))
+                                    ]
+
+                                GameFinished ->
+                                    [ g [ transform [ Translate 6 0 ] ] (viewScore opponentScore inGameModel.discardPile Nothing)
+                                    , g [ transform [ Translate 6 3 ] ] (viewScore playerScore inGameModel.discardPile Nothing)
+                                    ]
+                           )
+                        ++ [ g [ id "cards" ] (viewCards model) ]
     in
     svg
         [ viewBox -border -border (gameWidth + border * 2) (gameHeight + border * 2)
@@ -385,8 +382,8 @@ viewPlayerCard model card =
 
         InGame inGameModel ->
             let
-                deck : ( () -> Maybe Int, Int -> Svg msg )
-                deck =
+                viewIfInDeck : ( () -> Maybe Int, Int -> Svg msg )
+                viewIfInDeck =
                     ( \_ -> List.Extra.findIndex (\( c, _ ) -> c == card) inGameModel.initialDeck
                     , \index ->
                         viewCard []
@@ -397,8 +394,8 @@ viewPlayerCard model card =
                             }
                     )
 
-                discardPile : ( () -> Maybe Int, Int -> Svg msg )
-                discardPile =
+                viewIfInDiscardPile : ( () -> Maybe Int, Int -> Svg msg )
+                viewIfInDiscardPile =
                     ( \_ ->
                         if List.any (\( c, _ ) -> c == card) inGameModel.discardPile then
                             List.Extra.findIndex (\( c, _ ) -> c == card) inGameModel.initialDeck
@@ -417,61 +414,82 @@ viewPlayerCard model card =
                 specific : List ( () -> Maybe Int, Int -> Svg GameMsg )
                 specific =
                     case inGameModel.game of
+                        DrawingInitialHand ->
+                            []
+
                         PreparingHand preparingModel ->
-                            [ ( \_ -> List.Extra.elemIndex card preparingModel.playerChoices
-                              , \index ->
-                                    viewCard
-                                        [ onClick (Unplay card)
-                                        , cursor CursorPointer
-                                        ]
-                                        { x = 1 + toFloat index * (cardWidth + 0.2)
-                                        , y = 2
-                                        , card = card
-                                        , faceUp = True
-                                        }
-                              )
-                            , ( \_ ->
-                                    let
-                                        reducedHand : List (Card Player)
-                                        reducedHand =
-                                            List.Extra.removeWhen
-                                                (\c -> List.member c preparingModel.playerChoices)
-                                                preparingModel.playerHand
-                                    in
-                                    List.Extra.elemIndex card reducedHand
-                              , \index ->
-                                    viewCard
-                                        [ onClick (Play card)
-                                        , cursor CursorPointer
-                                        ]
-                                        { x = 1 + toFloat index * (cardWidth + 0.2)
-                                        , y = 3
-                                        , card = card
-                                        , faceUp = True
-                                        }
-                              )
+                            let
+                                viewIfSelected : ( () -> Maybe Int, Int -> Svg GameMsg )
+                                viewIfSelected =
+                                    ( \_ -> List.Extra.elemIndex card preparingModel.playerChoices
+                                    , \index ->
+                                        viewCard
+                                            [ onClick (Unplay card)
+                                            , cursor CursorPointer
+                                            ]
+                                            { x = 1 + toFloat index * (cardWidth + 0.2)
+                                            , y = 2
+                                            , card = card
+                                            , faceUp = True
+                                            }
+                                    )
+
+                                viewIfInHand : ( () -> Maybe Int, Int -> Svg GameMsg )
+                                viewIfInHand =
+                                    ( \_ ->
+                                        let
+                                            reducedHand : List (Card Player)
+                                            reducedHand =
+                                                List.Extra.removeWhen
+                                                    (\c -> List.member c preparingModel.playerChoices)
+                                                    preparingModel.playerHand
+                                        in
+                                        List.Extra.elemIndex card reducedHand
+                                    , \index ->
+                                        viewCard
+                                            [ onClick (Play card)
+                                            , cursor CursorPointer
+                                            ]
+                                            { x = 1 + toFloat index * (cardWidth + 0.2)
+                                            , y = 3
+                                            , card = card
+                                            , faceUp = True
+                                            }
+                                    )
+                            in
+                            [ viewIfSelected
+                            , viewIfInHand
                             ]
 
                         PlayedHand playedModel ->
-                            [ ( \_ -> List.Extra.findIndex (\( c, _ ) -> c == card) playedModel.play
-                              , \index ->
-                                    viewCard []
-                                        { x = 1 + toFloat index * (cardWidth + 0.2)
-                                        , y = 2
-                                        , card = card
-                                        , faceUp = True
-                                        }
-                              )
-                            ]
+                            let
+                                viewIfInPlay : ( () -> Maybe Int, Int -> Svg msg )
+                                viewIfInPlay =
+                                    ( \_ -> List.Extra.findIndex (\( c, _ ) -> c == card) playedModel.play
+                                    , \index ->
+                                        viewCard []
+                                            { x = 1 + toFloat index * (cardWidth + 0.2)
+                                            , y = 2
+                                            , card = card
+                                            , faceUp = True
+                                            }
+                                    )
+                            in
+                            [ viewIfInPlay ]
 
                         GameFinished ->
                             []
             in
-            findFirst (specific ++ [ discardPile, deck ])
+            findFirst (specific ++ [ viewIfInDiscardPile, viewIfInDeck ])
                 |> TypedSvg.Core.map GameMsg
 
 
-findFirst : List ( () -> Maybe b, b -> Svg msg ) -> Svg msg
+findFirst :
+    List
+        ( () -> Maybe b
+        , b -> Svg msg
+        )
+    -> Svg msg
 findFirst list =
     list
         |> List.Extra.findMap (\( f, g ) -> Maybe.map g (f ()))
@@ -518,6 +536,9 @@ viewOpponentCard model card =
                 specific : List ( () -> Maybe Int, Int -> Svg msg )
                 specific =
                     case inGameModel.game of
+                        DrawingInitialHand ->
+                            []
+
                         PreparingHand preparingModel ->
                             [ ( \_ -> List.Extra.elemIndex card preparingModel.opponentHand
                               , \i ->
@@ -567,7 +588,7 @@ submitHandButton preparingModel =
                     , width ((cardWidth + 0.2) * handSize - 0.2)
                     , height cardHeight
                     , fill (Paint Color.orange)
-                    , rx 0.2
+                    , rx 0.1
                     , style
                         (String.join "; "
                             [ "transition: all 0.4s ease-in-out"
@@ -718,7 +739,7 @@ viewCard attrs config =
                 , y margin
                 , width cardWidth
                 , height cardHeight
-                , rx 0.2
+                , rx 0.1
                 , fill (Paint cardBackground)
                 , stroke (Paint border)
                 ]
