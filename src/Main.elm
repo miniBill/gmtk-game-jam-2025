@@ -13,18 +13,28 @@ import Random
 import Random.List
 import Task
 import TypedSvg exposing (g, rect, svg)
-import TypedSvg.Attributes exposing (class, cursor, fill, id, stroke, style, transform, viewBox)
+import TypedSvg.Attributes exposing (class, cursor, dominantBaseline, fill, id, stroke, style, transform, viewBox)
 import TypedSvg.Attributes.InPx exposing (fontSize, height, rx, strokeWidth, width, x, y)
 import TypedSvg.Core exposing (Attribute, Svg, text)
 import TypedSvg.Events exposing (onClick)
 import TypedSvg.Extra exposing (centeredText)
-import TypedSvg.Types exposing (Cursor(..), Paint(..), Transform(..))
+import TypedSvg.Types exposing (Cursor(..), DominantBaseline(..), Paint(..), Transform(..))
 import Types exposing (Card, Character(..), Flags, Opponent, Player, opponentCard, playerCard)
 
 
 handSize : number
 handSize =
     7
+
+
+roundsPerLoop : number
+roundsPerLoop =
+    5
+
+
+deckSize : number
+deckSize =
+    handSize * roundsPerLoop
 
 
 cardWidth : Float
@@ -98,7 +108,7 @@ update msg model =
                         (let
                             oneDeck : (Int -> Card kind) -> Random.Generator (List (Card kind))
                             oneDeck f =
-                                List.range 1 100
+                                List.range 1 deckSize
                                     |> List.map f
                                     |> Random.List.shuffle
                          in
@@ -144,21 +154,25 @@ update msg model =
 
         ( SubmitHand, PreparingHand preparingModel ) ->
             if List.length preparingModel.playerChoices == handSize then
+                let
+                    opponentHand : List (Card Opponent)
+                    opponentHand =
+                        calculateBestHand
+                            preparingModel.mainSeed
+                            preparingModel.playerChoices
+                            preparingModel.opponentHand
+                in
                 ( PlayedHand
                     { currentAvatar = preparingModel.currentAvatar
                     , initialDeck = preparingModel.initialDeck
                     , play =
                         List.map2 Tuple.pair
                             preparingModel.playerChoices
-                            (calculateBestHand
-                                preparingModel.mainSeed
-                                preparingModel.playerChoices
-                                preparingModel.opponentHand
-                            )
+                            opponentHand
                     , discardPile = preparingModel.discardPile
                     , mainSeed = preparingModel.mainSeed
                     }
-                , Process.sleep 1000 |> Task.perform (\_ -> NextRound)
+                , Process.sleep 2000 |> Task.perform (\_ -> NextRound)
                 )
 
             else
@@ -177,8 +191,8 @@ update msg model =
                 , initialDeck = playedModel.initialDeck
                 , discardPile = playedModel.discardPile ++ playedModel.play
                 , mainSeed = playedModel.mainSeed
-                , opponentHand = opponentHand
-                , playerHand = playerHand
+                , opponentHand = List.sortBy Types.cardValue opponentHand
+                , playerHand = List.sortBy Types.cardValue playerHand
                 , playerChoices = []
                 }
             , Cmd.none
@@ -228,6 +242,7 @@ view model =
                     [ backgroundRect
                     , g [ id "opponentGroup" ]
                         [ viewAvatar (Types.previous preparingModel.currentAvatar)
+                        , g [ transform [ Translate 6 0 ] ] (viewScore opponentScore preparingModel.discardPile Nothing)
                         ]
                     , g
                         [ id "playerGroup"
@@ -236,6 +251,7 @@ view model =
                       <|
                         List.filterMap identity
                             [ Just <| g [ transform [ Translate 0 1 ] ] [ viewAvatar preparingModel.currentAvatar ]
+                            , Just <| g [ transform [ Translate 6 1 ] ] (viewScore playerScore preparingModel.discardPile Nothing)
                             , submitHandButton preparingModel
                             ]
                     , g [ id "cards" ] (viewCards model)
@@ -245,12 +261,14 @@ view model =
                     [ backgroundRect
                     , g [ id "opponentGroup" ]
                         [ viewAvatar (Types.previous playedModel.currentAvatar)
+                        , g [ transform [ Translate 6 0 ] ] (viewScore opponentScore playedModel.discardPile (Just playedModel.play))
                         ]
                     , g
                         [ id "playerGroup"
                         , transform [ Translate 0 2 ]
                         ]
                         [ g [ transform [ Translate 0 1 ] ] [ viewAvatar playedModel.currentAvatar ]
+                        , g [ transform [ Translate 6 1 ] ] (viewScore playerScore playedModel.discardPile (Just playedModel.play))
                         ]
                     , g [ id "cards" ] (viewCards model)
                     ]
@@ -262,6 +280,36 @@ view model =
         , style "transform: perspective(1)"
         ]
         children
+
+
+opponentScore : List ( Card Player, Card Opponent ) -> Float
+opponentScore pile =
+    toFloat (List.length pile) - playerScore pile
+
+
+viewScore : (List ( Card Player, Card Opponent ) -> Float) -> List ( Card Player, Card Opponent ) -> Maybe (List ( Card Player, Card Opponent )) -> List (Svg Msg)
+viewScore toScore discard play =
+    [ centeredText
+        [ x 0.5
+        , y 0.45
+        , fill (Paint Color.white)
+        , dominantBaseline DominantBaselineAuto
+        ]
+        [ text "Score" ]
+    , centeredText
+        [ x 0.5
+        , y 0.55
+        , fill (Paint Color.white)
+        , dominantBaseline DominantBaselineHanging
+        ]
+        [ case play of
+            Nothing ->
+                text (String.fromFloat (toScore discard))
+
+            Just p ->
+                text (String.fromFloat (toScore discard) ++ " => " ++ String.fromFloat (toScore (discard ++ p)))
+        ]
+    ]
 
 
 viewCards : Model -> List (Svg Msg)
@@ -286,32 +334,40 @@ viewCards model =
 
 
 viewPlayerCard : Model -> Card Player -> Svg Msg
-viewPlayerCard model playerCard =
+viewPlayerCard model card =
     let
         deck :
             { model | initialDeck : List ( Card Player, Card Opponent ) }
             -> ( () -> Maybe Int, Int -> Svg msg )
         deck innerModel =
-            ( \_ -> List.Extra.findIndex (\( c, _ ) -> c == playerCard) innerModel.initialDeck
+            ( \_ -> List.Extra.findIndex (\( c, _ ) -> c == card) innerModel.initialDeck
             , \index ->
                 viewCard []
-                    { x = 0.3 - toFloat index / 250
+                    { x = deckLerp index
                     , y = 2
-                    , card = playerCard
+                    , card = card
                     , faceUp = False
                     }
             )
 
         discardPile :
-            { model | discardPile : List ( Card Player, Card Opponent ) }
+            { model
+                | initialDeck : List ( Card Player, Card Opponent )
+                , discardPile : List ( Card Player, Card Opponent )
+            }
             -> ( () -> Maybe Int, Int -> Svg msg )
         discardPile innerModel =
-            ( \_ -> List.Extra.findIndex (\( c, _ ) -> c == playerCard) innerModel.discardPile
+            ( \_ ->
+                if List.any (\( c, _ ) -> c == card) innerModel.discardPile then
+                    List.Extra.findIndex (\( c, _ ) -> c == card) innerModel.initialDeck
+
+                else
+                    Nothing
             , \index ->
                 viewCard []
-                    { x = 6.3 - toFloat index / 250
+                    { x = 6 + deckLerp index
                     , y = 2
-                    , card = playerCard
+                    , card = card
                     , faceUp = False
                     }
             )
@@ -322,15 +378,15 @@ viewPlayerCard model playerCard =
 
         PreparingHand preparingModel ->
             findFirst
-                [ ( \_ -> List.Extra.elemIndex playerCard preparingModel.playerChoices
+                [ ( \_ -> List.Extra.elemIndex card preparingModel.playerChoices
                   , \index ->
                         viewCard
-                            [ onClick (Unplay playerCard)
+                            [ onClick (Unplay card)
                             , cursor CursorPointer
                             ]
                             { x = 1 + toFloat index * (cardWidth + 0.2)
                             , y = 2
-                            , card = playerCard
+                            , card = card
                             , faceUp = True
                             }
                   )
@@ -342,15 +398,15 @@ viewPlayerCard model playerCard =
                                     (\c -> List.member c preparingModel.playerChoices)
                                     preparingModel.playerHand
                         in
-                        List.Extra.elemIndex playerCard reducedHand
+                        List.Extra.elemIndex card reducedHand
                   , \index ->
                         viewCard
-                            [ onClick (Play playerCard)
+                            [ onClick (Play card)
                             , cursor CursorPointer
                             ]
                             { x = 1 + toFloat index * (cardWidth + 0.2)
                             , y = 3
-                            , card = playerCard
+                            , card = card
                             , faceUp = True
                             }
                   )
@@ -360,12 +416,12 @@ viewPlayerCard model playerCard =
 
         PlayedHand playedModel ->
             findFirst
-                [ ( \_ -> List.Extra.findIndex (\( c, _ ) -> c == playerCard) playedModel.play
+                [ ( \_ -> List.Extra.findIndex (\( c, _ ) -> c == card) playedModel.play
                   , \index ->
                         viewCard []
                             { x = 1 + toFloat index * (cardWidth + 0.2)
                             , y = 2
-                            , card = playerCard
+                            , card = card
                             , faceUp = True
                             }
                   )
@@ -382,30 +438,38 @@ findFirst list =
 
 
 viewOpponentCard : Model -> Card Opponent -> Svg Msg
-viewOpponentCard model opponentCard =
+viewOpponentCard model card =
     let
         deck : { a | initialDeck : List ( Card Player, Card Opponent ) } -> ( () -> Maybe Int, Int -> Svg msg )
         deck innerModel =
-            ( \_ -> List.Extra.findIndex (\( _, c ) -> c == opponentCard) innerModel.initialDeck
-            , \i ->
+            ( \_ -> List.Extra.findIndex (\( _, c ) -> c == card) innerModel.initialDeck
+            , \index ->
                 viewCard []
-                    { x = 0.3 - toFloat i / 250
+                    { x = deckLerp index
                     , y = 1
-                    , card = opponentCard
+                    , card = card
                     , faceUp = False
                     }
             )
 
         discardPile :
-            { model | discardPile : List ( Card Player, Card Opponent ) }
+            { model
+                | initialDeck : List ( Card Player, Card Opponent )
+                , discardPile : List ( Card Player, Card Opponent )
+            }
             -> ( () -> Maybe Int, Int -> Svg msg )
         discardPile innerModel =
-            ( \_ -> List.Extra.findIndex (\( _, c ) -> c == opponentCard) innerModel.discardPile
+            ( \_ ->
+                if List.any (\( _, c ) -> c == card) innerModel.discardPile then
+                    List.Extra.findIndex (\( _, c ) -> c == card) innerModel.initialDeck
+
+                else
+                    Nothing
             , \index ->
                 viewCard []
-                    { x = 6.3 - toFloat index / 250
+                    { x = 6 + deckLerp index
                     , y = 1
-                    , card = opponentCard
+                    , card = card
                     , faceUp = False
                     }
             )
@@ -416,12 +480,12 @@ viewOpponentCard model opponentCard =
 
         PreparingHand preparingModel ->
             findFirst
-                [ ( \_ -> List.Extra.elemIndex opponentCard preparingModel.opponentHand
+                [ ( \_ -> List.Extra.elemIndex card preparingModel.opponentHand
                   , \i ->
                         viewCard []
                             { x = 1 + toFloat i * (cardWidth + 0.2)
                             , y = 0
-                            , card = opponentCard
+                            , card = card
                             , faceUp = False
                             }
                   )
@@ -431,12 +495,12 @@ viewOpponentCard model opponentCard =
 
         PlayedHand playedModel ->
             findFirst
-                [ ( \_ -> List.Extra.findIndex (\( _, c ) -> c == opponentCard) playedModel.play
+                [ ( \_ -> List.Extra.findIndex (\( _, c ) -> c == card) playedModel.play
                   , \i ->
                         viewCard []
                             { x = 1 + toFloat i * (cardWidth + 0.2)
                             , y = 1
-                            , card = opponentCard
+                            , card = card
                             , faceUp = True
                             }
                   )
@@ -445,11 +509,19 @@ viewOpponentCard model opponentCard =
                 ]
 
 
+deckLerp : Int -> Float
+deckLerp index =
+    (toFloat index - 1) / deckSize * (1 - cardWidth) - 0.1
+
+
 submitHandButton : { a | playerChoices : List (Card Player) } -> Maybe (Svg Msg)
 submitHandButton preparingModel =
     if List.length preparingModel.playerChoices == handSize then
         Just <|
-            g [ transform [ Translate 1 1 ] ]
+            g
+                [ transform [ Translate 1 1 ]
+                , onClick SubmitHand
+                ]
                 [ rect
                     [ x 0.1
                     , y 0.1
@@ -468,7 +540,6 @@ submitHandButton preparingModel =
                 , centeredText
                     [ x ((cardWidth + 0.2) * handSize / 2 - 0.1)
                     , y 0.5
-                    , onClick SubmitHand
                     ]
                     [ text "Submit hand" ]
                 ]
@@ -482,7 +553,7 @@ calculateBestHand seed beingPlayed opponentHand =
     opponentHand
         |> shuffle seed
         |> permutations
-        |> minimumBy (opponentScore beingPlayed)
+        |> minimumBy (\hand -> playerScore (List.map2 Tuple.pair beingPlayed hand))
         |> Maybe.withDefault opponentHand
 
 
@@ -546,15 +617,10 @@ shuffle seed list =
         |> Tuple.first
 
 
-opponentScore : List (Card Player) -> List (Card Opponent) -> Float
-opponentScore playerHand opponentHand =
-    handSize - playerScore playerHand opponentHand
-
-
-playerScore : List (Card Player) -> List (Card Opponent) -> Float
-playerScore playerHand opponentHand =
-    List.map2
-        (\playerCard opponentCard ->
+playerScore : List ( Card Player, Card Opponent ) -> Float
+playerScore pile =
+    List.map
+        (\( playerCard, opponentCard ) ->
             case compare (Types.cardValue playerCard) (Types.cardValue opponentCard) of
                 LT ->
                     0
@@ -565,8 +631,7 @@ playerScore playerHand opponentHand =
                 GT ->
                     1
         )
-        playerHand
-        opponentHand
+        pile
         |> List.sum
 
 
@@ -603,7 +668,7 @@ viewCard attrs config =
                             { alpha = 1
                             , lightness = 0.85
                             , chroma = 0.07
-                            , hue = (toFloat (Types.cardValue config.card) - 1) / 100
+                            , hue = (toFloat (Types.cardValue config.card) - 1) / deckSize
                             }
 
                     else
