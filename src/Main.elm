@@ -59,16 +59,16 @@ type Model
 
 
 type Game
-    = DrawingInitialHand
-    | PreparingHand
+    = FirstLoopDrawingInitialHand
+    | FirstLoopPreparingHand
         { playerHand : List (Card Player)
         , playerChoices : List (Card Player)
         , opponentHand : List (Card Opponent)
         }
-    | PlayedHand
+    | FirstLoopPlayedHand
         { play : List ( Card Player, Card Opponent )
         }
-    | GameFinished
+    | FirstLoopGameFinished
 
 
 type Msg
@@ -131,7 +131,7 @@ update msg model =
                         , initialDeck = initialDeck
                         , discardPile = []
                         , mainSeed = seed
-                        , game = DrawingInitialHand
+                        , game = FirstLoopDrawingInitialHand
                         }
             in
             ( newModel
@@ -145,11 +145,11 @@ update msg model =
                     InGame { inGameModel | game = inner }
             in
             case ( gameMsg, inGameModel.game ) of
-                ( Play i, PreparingHand preparingModel ) ->
+                ( Play i, FirstLoopPreparingHand preparingModel ) ->
                     ( { preparingModel
                         | playerChoices = preparingModel.playerChoices ++ [ i ]
                       }
-                        |> PreparingHand
+                        |> FirstLoopPreparingHand
                         |> stillInGame
                     , Cmd.none
                     )
@@ -157,11 +157,11 @@ update msg model =
                 ( Play _, _ ) ->
                     ( model, Cmd.none )
 
-                ( Unplay i, PreparingHand preparingModel ) ->
+                ( Unplay i, FirstLoopPreparingHand preparingModel ) ->
                     ( { preparingModel
                         | playerChoices = List.Extra.remove i preparingModel.playerChoices
                       }
-                        |> PreparingHand
+                        |> FirstLoopPreparingHand
                         |> stillInGame
                     , Cmd.none
                     )
@@ -169,7 +169,7 @@ update msg model =
                 ( Unplay _, _ ) ->
                     ( model, Cmd.none )
 
-                ( SubmitHand, PreparingHand preparingModel ) ->
+                ( SubmitHand, FirstLoopPreparingHand preparingModel ) ->
                     if List.length preparingModel.playerChoices == handSize then
                         let
                             opponentHand : List (Card Opponent)
@@ -184,13 +184,13 @@ update msg model =
                                     preparingModel.playerChoices
                                     opponentHand
                           }
-                            |> PlayedHand
+                            |> FirstLoopPlayedHand
                             |> stillInGame
                         , let
                             _ =
                                 Debug.todo
                           in
-                          Process.sleep 500000 |> Task.perform (\_ -> GameMsg NextRound)
+                          Process.sleep 5000 |> Task.perform (\_ -> GameMsg NextRound)
                         )
 
                     else
@@ -199,7 +199,7 @@ update msg model =
                 ( SubmitHand, _ ) ->
                     ( model, Cmd.none )
 
-                ( NextRound, DrawingInitialHand ) ->
+                ( NextRound, FirstLoopDrawingInitialHand ) ->
                     let
                         ( playerHand, opponentHand ) =
                             inGameModel.initialDeck
@@ -213,12 +213,12 @@ update msg model =
                                 , playerHand = List.sortBy Types.cardValue playerHand
                                 , playerChoices = []
                                 }
-                                    |> PreparingHand
+                                    |> FirstLoopPreparingHand
                         }
                     , Cmd.none
                     )
 
-                ( NextRound, PlayedHand playedModel ) ->
+                ( NextRound, FirstLoopPlayedHand playedModel ) ->
                     let
                         ( playerHand, opponentHand ) =
                             inGameModel.initialDeck
@@ -226,18 +226,28 @@ update msg model =
                                 |> List.take handSize
                                 |> List.unzip
                     in
-                    ( InGame
-                        { inGameModel
-                            | discardPile = inGameModel.discardPile ++ playedModel.play
-                            , game =
-                                { opponentHand = List.sortBy Types.cardValue opponentHand
-                                , playerHand = List.sortBy Types.cardValue playerHand
-                                , playerChoices = []
-                                }
-                                    |> PreparingHand
-                        }
-                    , Cmd.none
-                    )
+                    if List.isEmpty playerHand then
+                        ( InGame
+                            { inGameModel
+                                | discardPile = inGameModel.discardPile ++ playedModel.play
+                                , game = FirstLoopGameFinished
+                            }
+                        , Cmd.none
+                        )
+
+                    else
+                        ( InGame
+                            { inGameModel
+                                | discardPile = inGameModel.discardPile ++ playedModel.play
+                                , game =
+                                    { opponentHand = List.sortBy Types.cardValue opponentHand
+                                    , playerHand = List.sortBy Types.cardValue playerHand
+                                    , playerChoices = []
+                                    }
+                                        |> FirstLoopPreparingHand
+                            }
+                        , Cmd.none
+                        )
 
                 ( NextRound, _ ) ->
                     ( model, Cmd.none )
@@ -286,45 +296,70 @@ view model =
 
                         currentPlay =
                             case inGameModel.game of
-                                DrawingInitialHand ->
+                                FirstLoopDrawingInitialHand ->
                                     Nothing
 
-                                PreparingHand _ ->
+                                FirstLoopPreparingHand _ ->
                                     Nothing
 
-                                PlayedHand playedModel ->
+                                FirstLoopPlayedHand playedModel ->
                                     Just playedModel.play
 
-                                GameFinished ->
+                                FirstLoopGameFinished ->
                                     Nothing
                     in
-                    backgroundRect
-                        :: (case inGameModel.game of
-                                DrawingInitialHand ->
-                                    []
+                    [ backgroundRect
+                    , g []
+                        (case inGameModel.game of
+                            FirstLoopDrawingInitialHand ->
+                                []
 
-                                PreparingHand preparingModel ->
-                                    [ g
-                                        [ transform [ Translate 0 2 ]
-                                        ]
-                                      <|
-                                        List.filterMap identity
-                                            [ submitHandButton preparingModel
-                                            ]
+                            FirstLoopPreparingHand preparingModel ->
+                                [ g
+                                    [ transform [ Translate 0 2 ]
                                     ]
+                                  <|
+                                    List.filterMap identity
+                                        [ playHandButton preparingModel
+                                        ]
+                                ]
 
-                                PlayedHand playedModel ->
-                                    []
+                            FirstLoopPlayedHand playedModel ->
+                                []
 
-                                GameFinished ->
-                                    []
-                           )
-                        ++ [ viewAvatar (Types.previous inGameModel.currentAvatar)
-                           , g [ transform [ Translate 0 3 ] ] [ viewAvatar inGameModel.currentAvatar ]
-                           , g [ transform [ Translate 6 0 ] ] (viewScore opponentScore inGameModel.discardPile currentPlay)
-                           , g [ transform [ Translate 6 3 ] ] (viewScore playerScore inGameModel.discardPile currentPlay)
-                           , g [ id "cards" ] (viewCards model)
-                           ]
+                            FirstLoopGameFinished ->
+                                let
+                                    finalPlayerScore : Float
+                                    finalPlayerScore =
+                                        playerScore inGameModel.discardPile
+
+                                    finalOpponentScore : Float
+                                    finalOpponentScore =
+                                        opponentScore inGameModel.discardPile
+                                in
+                                [ centeredText
+                                    [ x 3.5
+                                    , y 2
+                                    , fill (Paint Color.white)
+                                    ]
+                                    [ case compare finalPlayerScore finalOpponentScore of
+                                        LT ->
+                                            text "Game finished. You lost."
+
+                                        EQ ->
+                                            text "Game finished. You tied."
+
+                                        GT ->
+                                            text "Game finished. You won!"
+                                    ]
+                                ]
+                        )
+                    , viewAvatar (Types.previous inGameModel.currentAvatar)
+                    , g [ transform [ Translate 0 3 ] ] [ viewAvatar inGameModel.currentAvatar ]
+                    , g [ transform [ Translate 6 0 ] ] (viewScore opponentScore inGameModel.discardPile currentPlay)
+                    , g [ transform [ Translate 6 3 ] ] (viewScore playerScore inGameModel.discardPile currentPlay)
+                    , g [ id "cards" ] (viewCards model)
+                    ]
     in
     svg
         [ viewBox -border -border (gameWidth + border * 2) (gameHeight + border * 2)
@@ -423,10 +458,10 @@ viewPlayerCard model card =
                 specific : List ( () -> Maybe Int, Int -> Svg GameMsg )
                 specific =
                     case inGameModel.game of
-                        DrawingInitialHand ->
+                        FirstLoopDrawingInitialHand ->
                             []
 
-                        PreparingHand preparingModel ->
+                        FirstLoopPreparingHand preparingModel ->
                             let
                                 viewIfSelected : ( () -> Maybe Int, Int -> Svg GameMsg )
                                 viewIfSelected =
@@ -470,7 +505,7 @@ viewPlayerCard model card =
                             , viewIfInHand
                             ]
 
-                        PlayedHand playedModel ->
+                        FirstLoopPlayedHand playedModel ->
                             let
                                 viewIfInPlay : ( () -> Maybe Int, Int -> Svg msg )
                                 viewIfInPlay =
@@ -486,7 +521,7 @@ viewPlayerCard model card =
                             in
                             [ viewIfInPlay ]
 
-                        GameFinished ->
+                        FirstLoopGameFinished ->
                             []
             in
             findFirst (specific ++ [ viewIfInDiscardPile, viewIfInDeck ])
@@ -545,10 +580,10 @@ viewOpponentCard model card =
                 specific : List ( () -> Maybe Int, Int -> Svg msg )
                 specific =
                     case inGameModel.game of
-                        DrawingInitialHand ->
+                        FirstLoopDrawingInitialHand ->
                             []
 
-                        PreparingHand preparingModel ->
+                        FirstLoopPreparingHand preparingModel ->
                             [ ( \_ -> List.Extra.elemIndex card preparingModel.opponentHand
                               , \i ->
                                     viewCard []
@@ -560,7 +595,7 @@ viewOpponentCard model card =
                               )
                             ]
 
-                        PlayedHand playedModel ->
+                        FirstLoopPlayedHand playedModel ->
                             [ ( \_ -> List.Extra.findIndex (\( _, c ) -> c == card) playedModel.play
                               , \i ->
                                     viewCard []
@@ -572,7 +607,7 @@ viewOpponentCard model card =
                               )
                             ]
 
-                        GameFinished ->
+                        FirstLoopGameFinished ->
                             []
             in
             findFirst (specific ++ [ discardPile, deck ])
@@ -583,13 +618,14 @@ deckLerp index =
     (toFloat index - 1) / deckSize * (1 - cardWidth) - 0.1
 
 
-submitHandButton : { a | playerChoices : List (Card Player) } -> Maybe (Svg Msg)
-submitHandButton preparingModel =
+playHandButton : { a | playerChoices : List (Card Player) } -> Maybe (Svg Msg)
+playHandButton preparingModel =
     if List.length preparingModel.playerChoices == handSize then
         Just <|
             g
                 [ transform [ Translate 1 1 ]
                 , onClick (GameMsg SubmitHand)
+                , cursor CursorPointer
                 ]
                 [ rect
                     [ x 0.1
@@ -610,7 +646,7 @@ submitHandButton preparingModel =
                     [ x ((cardWidth + 0.2) * handSize / 2 - 0.1)
                     , y 0.5
                     ]
-                    [ text "Submit hand" ]
+                    [ text "Play hand" ]
                 ]
 
     else
@@ -776,18 +812,7 @@ viewCard attrs config =
             ]
 
          else
-            [ cardRect
-            , let
-                _ =
-                    Debug.todo
-              in
-              centeredText
-                [ x (cardWidth / 2 + margin)
-                , y (cardHeight / 2 + margin)
-                , fill (Paint Color.green)
-                ]
-                [ text (String.fromInt (Types.cardValue config.card)) ]
-            ]
+            [ cardRect ]
         )
 
 
