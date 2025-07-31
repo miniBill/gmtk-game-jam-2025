@@ -190,7 +190,7 @@ update msg model =
                             _ =
                                 Debug.todo
                           in
-                          Process.sleep 50000 |> Task.perform (\_ -> GameMsg NextRound)
+                          Process.sleep 500000 |> Task.perform (\_ -> GameMsg NextRound)
                         )
 
                     else
@@ -242,7 +242,7 @@ update msg model =
                 ( NextRound, _ ) ->
                     ( model, Cmd.none )
 
-        ( _, _ ) ->
+        _ ->
             let
                 _ =
                     Debug.log "Wrong combination" ( msg, model )
@@ -283,39 +283,48 @@ view model =
                                 , fill (Paint (colorFromHex "#234000"))
                                 ]
                                 []
+
+                        currentPlay =
+                            case inGameModel.game of
+                                DrawingInitialHand ->
+                                    Nothing
+
+                                PreparingHand _ ->
+                                    Nothing
+
+                                PlayedHand playedModel ->
+                                    Just playedModel.play
+
+                                GameFinished ->
+                                    Nothing
                     in
                     backgroundRect
-                        :: viewAvatar (Types.previous inGameModel.currentAvatar)
-                        :: g [ transform [ Translate 0 3 ] ] [ viewAvatar inGameModel.currentAvatar ]
                         :: (case inGameModel.game of
                                 DrawingInitialHand ->
-                                    [ g [ transform [ Translate 6 0 ] ] (viewScore opponentScore inGameModel.discardPile Nothing)
-                                    , g [ transform [ Translate 6 3 ] ] (viewScore playerScore inGameModel.discardPile Nothing)
-                                    ]
+                                    []
 
                                 PreparingHand preparingModel ->
-                                    [ g [ transform [ Translate 6 0 ] ] (viewScore opponentScore inGameModel.discardPile Nothing)
-                                    , g
+                                    [ g
                                         [ transform [ Translate 0 2 ]
                                         ]
                                       <|
                                         List.filterMap identity
-                                            [ Just <| g [ transform [ Translate 6 1 ] ] (viewScore playerScore inGameModel.discardPile Nothing)
-                                            , submitHandButton preparingModel
+                                            [ submitHandButton preparingModel
                                             ]
                                     ]
 
                                 PlayedHand playedModel ->
-                                    [ g [ transform [ Translate 6 0 ] ] (viewScore opponentScore inGameModel.discardPile (Just playedModel.play))
-                                    , g [ transform [ Translate 6 3 ] ] (viewScore playerScore inGameModel.discardPile (Just playedModel.play))
-                                    ]
+                                    []
 
                                 GameFinished ->
-                                    [ g [ transform [ Translate 6 0 ] ] (viewScore opponentScore inGameModel.discardPile Nothing)
-                                    , g [ transform [ Translate 6 3 ] ] (viewScore playerScore inGameModel.discardPile Nothing)
-                                    ]
+                                    []
                            )
-                        ++ [ g [ id "cards" ] (viewCards model) ]
+                        ++ [ viewAvatar (Types.previous inGameModel.currentAvatar)
+                           , g [ transform [ Translate 0 3 ] ] [ viewAvatar inGameModel.currentAvatar ]
+                           , g [ transform [ Translate 6 0 ] ] (viewScore opponentScore inGameModel.discardPile currentPlay)
+                           , g [ transform [ Translate 6 3 ] ] (viewScore playerScore inGameModel.discardPile currentPlay)
+                           , g [ id "cards" ] (viewCards model)
+                           ]
     in
     svg
         [ viewBox -border -border (gameWidth + border * 2) (gameHeight + border * 2)
