@@ -8,8 +8,10 @@ import Color exposing (Color)
 import Color.Extra exposing (colorFromHex)
 import Color.Oklch as Oklch
 import List.Extra
+import Process
 import Random
 import Random.List
+import Task
 import TypedSvg exposing (g, rect, svg)
 import TypedSvg.Attributes exposing (class, cursor, fill, id, stroke, style, transform, viewBox)
 import TypedSvg.Attributes.InPx exposing (fontSize, height, rx, strokeWidth, width, x, y)
@@ -40,8 +42,8 @@ type Model
     | PreparingHand
         { currentAvatar : ( Character, Graphics )
         , initialDeck : List ( Card Player, Card Opponent )
-        , hand : List (Card Player)
-        , beingPlayed : List (Card Player)
+        , playerHand : List (Card Player)
+        , playerChoices : List (Card Player)
         , opponentHand : List (Card Opponent)
         , discardPile : List ( Card Player, Card Opponent )
         , mainSeed : Random.Seed
@@ -60,6 +62,7 @@ type Msg
     | Play (Card Player)
     | Unplay (Card Player)
     | SubmitHand
+    | NextRound
 
 
 main : Program Flags Model Msg
@@ -85,7 +88,7 @@ init _ =
     )
 
 
-update : Msg -> Model -> ( Model, Cmd msg )
+update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case ( msg, model ) of
         ( GeneratedSeed generatedSeed, GeneratingSeed ) ->
@@ -111,8 +114,8 @@ update msg model =
                 newModel =
                     { currentAvatar = ( Karkat, Skull )
                     , initialDeck = initialDeck
-                    , hand = List.sortBy Types.cardValue hand
-                    , beingPlayed = []
+                    , playerHand = List.sortBy Types.cardValue hand
+                    , playerChoices = []
                     , opponentHand = List.sortBy Types.cardValue opponentHand
                     , discardPile = []
                     , mainSeed = seed
@@ -123,15 +126,9 @@ update msg model =
             , Cmd.none
             )
 
-        ( _, GeneratingSeed ) ->
-            ( model, Cmd.none )
-
-        ( GeneratedSeed newSeed, _ ) ->
-            ( model, Cmd.none )
-
         ( Play i, PreparingHand preparingModel ) ->
             ( { preparingModel
-                | beingPlayed = preparingModel.beingPlayed ++ [ i ]
+                | playerChoices = preparingModel.playerChoices ++ [ i ]
               }
                 |> PreparingHand
             , Cmd.none
@@ -139,35 +136,59 @@ update msg model =
 
         ( Unplay i, PreparingHand preparingModel ) ->
             ( { preparingModel
-                | beingPlayed = List.Extra.remove i preparingModel.beingPlayed
+                | playerChoices = List.Extra.remove i preparingModel.playerChoices
               }
                 |> PreparingHand
             , Cmd.none
             )
 
         ( SubmitHand, PreparingHand preparingModel ) ->
-            if List.length preparingModel.beingPlayed == handSize then
+            if List.length preparingModel.playerChoices == handSize then
                 ( PlayedHand
                     { currentAvatar = preparingModel.currentAvatar
                     , initialDeck = preparingModel.initialDeck
                     , play =
                         List.map2 Tuple.pair
-                            preparingModel.beingPlayed
+                            preparingModel.playerChoices
                             (calculateBestHand
                                 preparingModel.mainSeed
-                                preparingModel.beingPlayed
+                                preparingModel.playerChoices
                                 preparingModel.opponentHand
                             )
                     , discardPile = preparingModel.discardPile
                     , mainSeed = preparingModel.mainSeed
                     }
-                , Cmd.none
+                , Process.sleep 1000 |> Task.perform (\_ -> NextRound)
                 )
 
             else
                 ( model, Cmd.none )
 
-        ( _, PlayedHand playedModel ) ->
+        ( NextRound, PlayedHand playedModel ) ->
+            let
+                ( playerHand, opponentHand ) =
+                    playedModel.initialDeck
+                        |> List.drop (handSize + List.length playedModel.discardPile)
+                        |> List.take handSize
+                        |> List.unzip
+            in
+            ( PreparingHand
+                { currentAvatar = playedModel.currentAvatar
+                , initialDeck = playedModel.initialDeck
+                , discardPile = playedModel.discardPile ++ playedModel.play
+                , mainSeed = playedModel.mainSeed
+                , opponentHand = opponentHand
+                , playerHand = playerHand
+                , playerChoices = []
+                }
+            , Cmd.none
+            )
+
+        _ ->
+            let
+                _ =
+                    Debug.log "Ignoring (msg,model)" ( msg, model )
+            in
             ( model, Cmd.none )
 
 
@@ -301,7 +322,7 @@ viewPlayerCard model playerCard =
 
         PreparingHand preparingModel ->
             findFirst
-                [ ( \_ -> List.Extra.elemIndex playerCard preparingModel.beingPlayed
+                [ ( \_ -> List.Extra.elemIndex playerCard preparingModel.playerChoices
                   , \index ->
                         viewCard
                             [ onClick (Unplay playerCard)
@@ -318,8 +339,8 @@ viewPlayerCard model playerCard =
                             reducedHand : List (Card Player)
                             reducedHand =
                                 List.Extra.removeWhen
-                                    (\c -> List.member c preparingModel.beingPlayed)
-                                    preparingModel.hand
+                                    (\c -> List.member c preparingModel.playerChoices)
+                                    preparingModel.playerHand
                         in
                         List.Extra.elemIndex playerCard reducedHand
                   , \index ->
@@ -424,9 +445,9 @@ viewOpponentCard model opponentCard =
                 ]
 
 
-submitHandButton : { a | beingPlayed : List (Card Player) } -> Maybe (Svg Msg)
+submitHandButton : { a | playerChoices : List (Card Player) } -> Maybe (Svg Msg)
 submitHandButton preparingModel =
-    if List.length preparingModel.beingPlayed == handSize then
+    if List.length preparingModel.playerChoices == handSize then
         Just <|
             g [ transform [ Translate 1 1 ] ]
                 [ rect
