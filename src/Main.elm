@@ -12,8 +12,9 @@ import Process
 import Random
 import Random.List
 import Task
-import TypedSvg exposing (g, rect, svg)
+import TypedSvg exposing (g, rect, svg, tspan)
 import TypedSvg.Attributes exposing (class, cursor, dominantBaseline, fill, id, stroke, style, transform, viewBox)
+import TypedSvg.Attributes.InEm
 import TypedSvg.Attributes.InPx exposing (fontSize, height, rx, strokeWidth, width, x, y)
 import TypedSvg.Core exposing (Attribute, Svg, text)
 import TypedSvg.Events exposing (onClick)
@@ -22,14 +23,27 @@ import TypedSvg.Types exposing (Cursor(..), DominantBaseline(..), Paint(..), Tra
 import Types exposing (Card, Character(..), Flags, Opponent, Player, opponentCard, playerCard)
 
 
+smol : Bool
+smol =
+    True
+
+
 handSize : number
 handSize =
-    7
+    if smol then
+        3
+
+    else
+        7
 
 
 roundsPerLoop : number
 roundsPerLoop =
-    5
+    if smol then
+        3
+
+    else
+        5
 
 
 deckSize : number
@@ -55,20 +69,21 @@ type Model
         , discardPile : List ( Card Player, Card Opponent )
         , mainSeed : Random.Seed
         , game : Game
+        , previousBest : List Float
         }
 
 
 type Game
-    = FirstLoopDrawingInitialHand
-    | FirstLoopPreparingHand
+    = DrawingInitialHand
+    | PreparingHand
         { playerHand : List (Card Player)
         , playerChoices : List (Card Player)
         , opponentHand : List (Card Opponent)
         }
-    | FirstLoopPlayedHand
+    | PlayedHand
         { play : List ( Card Player, Card Opponent )
         }
-    | FirstLoopGameFinished
+    | GameFinished
 
 
 type Msg
@@ -81,6 +96,8 @@ type GameMsg
     | Unplay (Card Player)
     | SubmitHand
     | NextRound
+    | NextLoop
+    | NextGame
 
 
 main : Program Flags Model Msg
@@ -112,17 +129,7 @@ update msg model =
         ( GeneratedSeed generatedSeed, GeneratingSeed ) ->
             let
                 ( initialDeck, seed ) =
-                    Random.step
-                        (let
-                            oneDeck : (Int -> Card kind) -> Random.Generator (List (Card kind))
-                            oneDeck f =
-                                List.range 1 deckSize
-                                    |> List.map f
-                                    |> Random.List.shuffle
-                         in
-                         Random.map2 (List.map2 Tuple.pair) (oneDeck playerCard) (oneDeck opponentCard)
-                        )
-                        generatedSeed
+                    randomDeck generatedSeed
 
                 newModel : Model
                 newModel =
@@ -131,7 +138,8 @@ update msg model =
                         , initialDeck = initialDeck
                         , discardPile = []
                         , mainSeed = seed
-                        , game = FirstLoopDrawingInitialHand
+                        , game = DrawingInitialHand
+                        , previousBest = []
                         }
             in
             ( newModel
@@ -145,11 +153,11 @@ update msg model =
                     InGame { inGameModel | game = inner }
             in
             case ( gameMsg, inGameModel.game ) of
-                ( Play i, FirstLoopPreparingHand preparingModel ) ->
+                ( Play i, PreparingHand preparingModel ) ->
                     ( { preparingModel
                         | playerChoices = preparingModel.playerChoices ++ [ i ]
                       }
-                        |> FirstLoopPreparingHand
+                        |> PreparingHand
                         |> stillInGame
                     , Cmd.none
                     )
@@ -157,11 +165,11 @@ update msg model =
                 ( Play _, _ ) ->
                     ( model, Cmd.none )
 
-                ( Unplay i, FirstLoopPreparingHand preparingModel ) ->
+                ( Unplay i, PreparingHand preparingModel ) ->
                     ( { preparingModel
                         | playerChoices = List.Extra.remove i preparingModel.playerChoices
                       }
-                        |> FirstLoopPreparingHand
+                        |> PreparingHand
                         |> stillInGame
                     , Cmd.none
                     )
@@ -169,14 +177,18 @@ update msg model =
                 ( Unplay _, _ ) ->
                     ( model, Cmd.none )
 
-                ( SubmitHand, FirstLoopPreparingHand preparingModel ) ->
+                ( SubmitHand, PreparingHand preparingModel ) ->
                     if List.length preparingModel.playerChoices == handSize then
                         let
                             opponentHand : List (Card Opponent)
                             opponentHand =
-                                calculateBestHand
-                                    inGameModel.mainSeed
-                                    preparingModel.playerChoices
+                                if List.isEmpty inGameModel.previousBest then
+                                    calculateBestHand
+                                        inGameModel.mainSeed
+                                        preparingModel.playerChoices
+                                        preparingModel.opponentHand
+
+                                else
                                     preparingModel.opponentHand
                         in
                         ( { play =
@@ -184,13 +196,9 @@ update msg model =
                                     preparingModel.playerChoices
                                     opponentHand
                           }
-                            |> FirstLoopPlayedHand
+                            |> PlayedHand
                             |> stillInGame
-                        , let
-                            _ =
-                                Debug.todo
-                          in
-                          Process.sleep 5000 |> Task.perform (\_ -> GameMsg NextRound)
+                        , Process.sleep 4000 |> Task.perform (\_ -> GameMsg NextRound)
                         )
 
                     else
@@ -199,7 +207,7 @@ update msg model =
                 ( SubmitHand, _ ) ->
                     ( model, Cmd.none )
 
-                ( NextRound, FirstLoopDrawingInitialHand ) ->
+                ( NextRound, DrawingInitialHand ) ->
                     let
                         ( playerHand, opponentHand ) =
                             inGameModel.initialDeck
@@ -209,16 +217,16 @@ update msg model =
                     ( InGame
                         { inGameModel
                             | game =
-                                { opponentHand = List.sortBy Types.cardValue opponentHand
+                                { opponentHand = opponentHand
                                 , playerHand = List.sortBy Types.cardValue playerHand
                                 , playerChoices = []
                                 }
-                                    |> FirstLoopPreparingHand
+                                    |> PreparingHand
                         }
                     , Cmd.none
                     )
 
-                ( NextRound, FirstLoopPlayedHand playedModel ) ->
+                ( NextRound, PlayedHand playedModel ) ->
                     let
                         ( playerHand, opponentHand ) =
                             inGameModel.initialDeck
@@ -230,7 +238,7 @@ update msg model =
                         ( InGame
                             { inGameModel
                                 | discardPile = inGameModel.discardPile ++ playedModel.play
-                                , game = FirstLoopGameFinished
+                                , game = GameFinished
                             }
                         , Cmd.none
                         )
@@ -240,16 +248,79 @@ update msg model =
                             { inGameModel
                                 | discardPile = inGameModel.discardPile ++ playedModel.play
                                 , game =
-                                    { opponentHand = List.sortBy Types.cardValue opponentHand
+                                    { opponentHand = opponentHand
                                     , playerHand = List.sortBy Types.cardValue playerHand
                                     , playerChoices = []
                                     }
-                                        |> FirstLoopPreparingHand
+                                        |> PreparingHand
                             }
                         , Cmd.none
                         )
 
                 ( NextRound, _ ) ->
+                    ( model, Cmd.none )
+
+                ( NextLoop, GameFinished ) ->
+                    let
+                        ( initialDeck, seed ) =
+                            Random.step
+                                (let
+                                    oneDeck : (Int -> Card kind) -> Random.Generator (List (Card kind))
+                                    oneDeck f =
+                                        List.range 1 deckSize
+                                            |> List.map f
+                                            |> Random.List.shuffle
+                                 in
+                                 Random.map
+                                    (\playerDeck ->
+                                        List.map2
+                                            (\playerCard ( previousCard, _ ) ->
+                                                ( playerCard
+                                                , Types.giveToOpponent previousCard
+                                                )
+                                            )
+                                            playerDeck
+                                            inGameModel.discardPile
+                                    )
+                                    (oneDeck playerCard)
+                                )
+                                inGameModel.mainSeed
+                    in
+                    ( InGame
+                        { currentAvatar = Types.next inGameModel.currentAvatar
+                        , discardPile = []
+                        , initialDeck = initialDeck
+                        , game = DrawingInitialHand
+                        , mainSeed = seed
+                        , previousBest = playerScore inGameModel.discardPile :: inGameModel.previousBest
+                        }
+                    , Process.sleep 2000 |> Task.perform (\_ -> GameMsg NextRound)
+                    )
+
+                ( NextLoop, _ ) ->
+                    ( model, Cmd.none )
+
+                ( NextGame, GameFinished ) ->
+                    let
+                        ( initialDeck, seed ) =
+                            randomDeck inGameModel.mainSeed
+
+                        newModel : Model
+                        newModel =
+                            InGame
+                                { currentAvatar = Types.next (Types.next inGameModel.currentAvatar)
+                                , initialDeck = initialDeck
+                                , discardPile = []
+                                , mainSeed = seed
+                                , game = DrawingInitialHand
+                                , previousBest = []
+                                }
+                    in
+                    ( newModel
+                    , Process.sleep 2000 |> Task.perform (\_ -> GameMsg NextRound)
+                    )
+
+                ( NextGame, _ ) ->
                     ( model, Cmd.none )
 
         _ ->
@@ -258,6 +329,21 @@ update msg model =
                     Debug.log "Wrong combination" ( msg, model )
             in
             ( model, Cmd.none )
+
+
+randomDeck : Random.Seed -> ( List ( Card Player, Card Opponent ), Random.Seed )
+randomDeck generatedSeed =
+    Random.step
+        (let
+            oneDeck : (Int -> Card kind) -> Random.Generator (List (Card kind))
+            oneDeck f =
+                List.range 1 deckSize
+                    |> List.map f
+                    |> Random.List.shuffle
+         in
+         Random.map2 (List.map2 Tuple.pair) (oneDeck playerCard) (oneDeck opponentCard)
+        )
+        generatedSeed
 
 
 view : Model -> TypedSvg.Core.Svg Msg
@@ -294,70 +380,134 @@ view model =
                                 ]
                                 []
 
+                        currentPlay : Maybe (List ( Card Player, Card Opponent ))
                         currentPlay =
                             case inGameModel.game of
-                                FirstLoopDrawingInitialHand ->
+                                DrawingInitialHand ->
                                     Nothing
 
-                                FirstLoopPreparingHand _ ->
+                                PreparingHand _ ->
                                     Nothing
 
-                                FirstLoopPlayedHand playedModel ->
+                                PlayedHand playedModel ->
                                     Just playedModel.play
 
-                                FirstLoopGameFinished ->
+                                GameFinished ->
                                     Nothing
                     in
                     [ backgroundRect
                     , g []
                         (case inGameModel.game of
-                            FirstLoopDrawingInitialHand ->
+                            DrawingInitialHand ->
                                 []
 
-                            FirstLoopPreparingHand preparingModel ->
-                                [ g
-                                    [ transform [ Translate 0 2 ]
+                            PreparingHand preparingModel ->
+                                List.filterMap identity
+                                    [ playHandButton preparingModel
                                     ]
-                                  <|
-                                    List.filterMap identity
-                                        [ playHandButton preparingModel
-                                        ]
-                                ]
 
-                            FirstLoopPlayedHand playedModel ->
+                            PlayedHand _ ->
                                 []
 
-                            FirstLoopGameFinished ->
+                            GameFinished ->
                                 let
                                     finalPlayerScore : Float
                                     finalPlayerScore =
                                         playerScore inGameModel.discardPile
-
-                                    finalOpponentScore : Float
-                                    finalOpponentScore =
-                                        opponentScore inGameModel.discardPile
                                 in
-                                [ centeredText
-                                    [ x 3.5
-                                    , y 2
-                                    , fill (Paint Color.white)
-                                    ]
-                                    [ case compare finalPlayerScore finalOpponentScore of
-                                        LT ->
-                                            text "Game finished. You lost."
+                                case inGameModel.previousBest of
+                                    [] ->
+                                        [ centeredText
+                                            [ x 3.5
+                                            , y 1.4
+                                            , fill (Paint Color.white)
+                                            ]
+                                            [ tspan
+                                                [ x 3.5
+                                                , TypedSvg.Attributes.InEm.dy 1.2
+                                                ]
+                                                [ text ("Your final score is " ++ String.fromFloat finalPlayerScore ++ ".") ]
+                                            , tspan
+                                                [ x 3.5
+                                                , TypedSvg.Attributes.InEm.dy 1.2
+                                                ]
+                                                [ text "That's pretty bad," ]
+                                            , tspan
+                                                [ x 3.5
+                                                , TypedSvg.Attributes.InEm.dy 1.2
+                                                ]
+                                                [ text "think you can do better?" ]
+                                            ]
+                                        , bottomButton (GameMsg NextLoop) "Next loop"
+                                        ]
 
-                                        EQ ->
-                                            text "Game finished. You tied."
+                                    previousBest :: _ ->
+                                        if previousBest < finalPlayerScore then
+                                            [ centeredText
+                                                [ x 3.5
+                                                , y 1.4
+                                                , fill (Paint Color.white)
+                                                ]
+                                                [ tspan
+                                                    [ x 3.5
+                                                    , TypedSvg.Attributes.InEm.dy 1.2
+                                                    ]
+                                                    [ text ("Your final score is " ++ String.fromFloat finalPlayerScore ++ ".") ]
+                                                , tspan
+                                                    [ x 3.5
+                                                    , TypedSvg.Attributes.InEm.dy 1.2
+                                                    ]
+                                                    [ text "That's slightly better," ]
+                                                , tspan
+                                                    [ x 3.5
+                                                    , TypedSvg.Attributes.InEm.dy 1.2
+                                                    ]
+                                                    [ text "think you can do more?" ]
+                                                ]
+                                            , bottomButton (GameMsg NextLoop) "Next loop"
+                                            ]
 
-                                        GT ->
-                                            text "Game finished. You won!"
-                                    ]
-                                ]
+                                        else
+                                            [ centeredText
+                                                [ x 3.5
+                                                , y 1.4
+                                                , fill (Paint Color.white)
+                                                ]
+                                                [ tspan
+                                                    [ x 3.5
+                                                    , TypedSvg.Attributes.InEm.dy 1.2
+                                                    ]
+                                                    [ text ("Your final score is " ++ String.fromFloat finalPlayerScore ++ ".") ]
+                                                , tspan
+                                                    [ x 3.5
+                                                    , TypedSvg.Attributes.InEm.dy 1.2
+                                                    ]
+                                                    [ text ("That's worse than " ++ String.fromFloat previousBest) ]
+                                                , tspan
+                                                    [ x 3.5
+                                                    , TypedSvg.Attributes.InEm.dy 1.2
+                                                    ]
+                                                    [ text "You managed to improve your score" ]
+                                                , tspan
+                                                    [ x 3.5
+                                                    , TypedSvg.Attributes.InEm.dy 1.2
+                                                    ]
+                                                    [ text
+                                                        (if List.length inGameModel.previousBest == 1 then
+                                                            "only once before failing."
+
+                                                         else
+                                                            String.fromInt (List.length inGameModel.previousBest) ++ " times."
+                                                        )
+                                                    ]
+                                                ]
+                                            , bottomButton (GameMsg NextGame) "Try again"
+                                            ]
                         )
                     , viewAvatar (Types.previous inGameModel.currentAvatar)
                     , g [ transform [ Translate 0 3 ] ] [ viewAvatar inGameModel.currentAvatar ]
-                    , g [ transform [ Translate 6 0 ] ] (viewScore opponentScore inGameModel.discardPile currentPlay)
-                    , g [ transform [ Translate 6 3 ] ] (viewScore playerScore inGameModel.discardPile currentPlay)
+                    , g [ transform [ Translate 6 0 ] ] (viewPreviousBest inGameModel.previousBest)
+                    , g [ transform [ Translate 6 3 ] ] (viewPlayerScore inGameModel.discardPile currentPlay)
                     , g [ id "cards" ] (viewCards model)
                     ]
     in
@@ -370,13 +520,32 @@ view model =
         children
 
 
-opponentScore : List ( Card Player, Card Opponent ) -> Float
-opponentScore pile =
-    toFloat (List.length pile) - playerScore pile
+viewPreviousBest : List Float -> List (Svg msg)
+viewPreviousBest previousBest =
+    case previousBest of
+        [] ->
+            []
+
+        score :: _ ->
+            [ centeredText
+                [ x 0.5
+                , y 0.45
+                , fill (Paint Color.white)
+                , dominantBaseline DominantBaselineAuto
+                ]
+                [ text "Previous" ]
+            , centeredText
+                [ x 0.5
+                , y 0.55
+                , fill (Paint Color.white)
+                , dominantBaseline DominantBaselineHanging
+                ]
+                [ text (String.fromFloat score) ]
+            ]
 
 
-viewScore : (List ( Card Player, Card Opponent ) -> Float) -> List ( Card Player, Card Opponent ) -> Maybe (List ( Card Player, Card Opponent )) -> List (Svg Msg)
-viewScore toScore discard play =
+viewPlayerScore : List ( Card Player, Card Opponent ) -> Maybe (List ( Card Player, Card Opponent )) -> List (Svg Msg)
+viewPlayerScore discard play =
     [ centeredText
         [ x 0.5
         , y 0.45
@@ -392,10 +561,10 @@ viewScore toScore discard play =
         ]
         [ case play of
             Nothing ->
-                text (String.fromFloat (toScore discard))
+                text (String.fromFloat (playerScore discard))
 
             Just p ->
-                text (String.fromFloat (toScore discard) ++ " => " ++ String.fromFloat (toScore (discard ++ p)))
+                text (String.fromFloat (playerScore discard) ++ " => " ++ String.fromFloat (playerScore (discard ++ p)))
         ]
     ]
 
@@ -458,10 +627,10 @@ viewPlayerCard model card =
                 specific : List ( () -> Maybe Int, Int -> Svg GameMsg )
                 specific =
                     case inGameModel.game of
-                        FirstLoopDrawingInitialHand ->
+                        DrawingInitialHand ->
                             []
 
-                        FirstLoopPreparingHand preparingModel ->
+                        PreparingHand preparingModel ->
                             let
                                 viewIfSelected : ( () -> Maybe Int, Int -> Svg GameMsg )
                                 viewIfSelected =
@@ -505,7 +674,7 @@ viewPlayerCard model card =
                             , viewIfInHand
                             ]
 
-                        FirstLoopPlayedHand playedModel ->
+                        PlayedHand playedModel ->
                             let
                                 viewIfInPlay : ( () -> Maybe Int, Int -> Svg msg )
                                 viewIfInPlay =
@@ -521,7 +690,7 @@ viewPlayerCard model card =
                             in
                             [ viewIfInPlay ]
 
-                        FirstLoopGameFinished ->
+                        GameFinished ->
                             []
             in
             findFirst (specific ++ [ viewIfInDiscardPile, viewIfInDeck ])
@@ -580,10 +749,10 @@ viewOpponentCard model card =
                 specific : List ( () -> Maybe Int, Int -> Svg msg )
                 specific =
                     case inGameModel.game of
-                        FirstLoopDrawingInitialHand ->
+                        DrawingInitialHand ->
                             []
 
-                        FirstLoopPreparingHand preparingModel ->
+                        PreparingHand preparingModel ->
                             [ ( \_ -> List.Extra.elemIndex card preparingModel.opponentHand
                               , \i ->
                                     viewCard []
@@ -595,7 +764,7 @@ viewOpponentCard model card =
                               )
                             ]
 
-                        FirstLoopPlayedHand playedModel ->
+                        PlayedHand playedModel ->
                             [ ( \_ -> List.Extra.findIndex (\( _, c ) -> c == card) playedModel.play
                               , \i ->
                                     viewCard []
@@ -607,7 +776,7 @@ viewOpponentCard model card =
                               )
                             ]
 
-                        FirstLoopGameFinished ->
+                        GameFinished ->
                             []
             in
             findFirst (specific ++ [ discardPile, deck ])
@@ -621,36 +790,40 @@ deckLerp index =
 playHandButton : { a | playerChoices : List (Card Player) } -> Maybe (Svg Msg)
 playHandButton preparingModel =
     if List.length preparingModel.playerChoices == handSize then
-        Just <|
-            g
-                [ transform [ Translate 1 1 ]
-                , onClick (GameMsg SubmitHand)
-                , cursor CursorPointer
-                ]
-                [ rect
-                    [ x 0.1
-                    , y 0.1
-                    , width ((cardWidth + 0.2) * handSize - 0.2)
-                    , height cardHeight
-                    , fill (Paint Color.orange)
-                    , rx 0.1
-                    , style
-                        (String.join "; "
-                            [ "transition: all 0.4s ease-in-out"
-                            , "filter: drop-shadow(0.01px 0.02px 0.02px rgb(0 0 0 / 0.4))"
-                            ]
-                        )
-                    ]
-                    []
-                , centeredText
-                    [ x ((cardWidth + 0.2) * handSize / 2 - 0.1)
-                    , y 0.5
-                    ]
-                    [ text "Play hand" ]
-                ]
+        Just <| bottomButton (GameMsg SubmitHand) "Play hand"
 
     else
         Nothing
+
+
+bottomButton : msg -> String -> Svg msg
+bottomButton msg label =
+    g
+        [ transform [ Translate 1.1 3.1 ]
+        , onClick msg
+        , cursor CursorPointer
+        ]
+        [ rect
+            [ x 0
+            , y 0
+            , width ((cardWidth + 0.2) * handSize - 0.2)
+            , height cardHeight
+            , fill (Paint Color.orange)
+            , rx 0.1
+            , style
+                (String.join "; "
+                    [ "transition: all 0.4s ease-in-out"
+                    , "filter: drop-shadow(0.01px 0.02px 0.02px rgb(0 0 0 / 0.4))"
+                    ]
+                )
+            ]
+            []
+        , centeredText
+            [ x ((cardWidth + 0.2) * handSize / 2 - 0.1)
+            , y (cardHeight / 2)
+            ]
+            [ text label ]
+        ]
 
 
 calculateBestHand : Random.Seed -> List (Card Player) -> List (Card Opponent) -> List (Card Opponent)
@@ -812,7 +985,18 @@ viewCard attrs config =
             ]
 
          else
-            [ cardRect ]
+            [ cardRect
+            , if smol then
+                centeredText
+                    [ x (cardWidth / 2 + margin)
+                    , y (cardHeight / 2 + margin)
+                    , fill (Paint Color.green)
+                    ]
+                    [ text (String.fromInt (Types.cardValue config.card)) ]
+
+              else
+                g [] []
+            ]
         )
 
 

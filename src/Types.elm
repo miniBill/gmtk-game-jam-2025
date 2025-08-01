@@ -1,4 +1,4 @@
-module Types exposing (Card, Character(..), Flags, Opponent, Player, cardValue, colorToString, isOpponentCard, next, opponentCard, playerCard, previous)
+module Types exposing (Card, Character(..), Flags, Opponent, Player, cardValue, colorToString, giveToOpponent, isOpponentCard, next, opponentCard, playerCard, previous)
 
 import Avataaars.Graphics exposing (Graphics(..))
 
@@ -260,3 +260,8 @@ previousGraphics graphics =
 
         Skull ->
             Bear
+
+
+giveToOpponent : Card Player -> Card Opponent
+giveToOpponent (Card _ c) =
+    Card { opponent = True } c
