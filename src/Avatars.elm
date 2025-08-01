@@ -146,6 +146,9 @@ characterToMouth character =
         Gamzee ->
             Mouth.Tongue
 
+        Eridan ->
+            Mouth.Sad
+
         Dirk ->
             Mouth.Serious
 
