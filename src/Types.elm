@@ -1,4 +1,4 @@
-module Types exposing (Card, Character(..), Flags, Opponent, Player, cardValue, characterToColor, giveToOpponent, isOpponentCard, next, opponentCard, playerCard, previous)
+module Types exposing (Card, Character(..), Flags, Opponent, Player, cardValue, characterToColor, giveToOpponent, isOpponentCard, next, nextCharacter, opponentCard, playerCard, previous)
 
 import Avataaars.Graphics exposing (Graphics(..))
 
@@ -40,7 +40,11 @@ type Opponent
 
 
 type Character
-    = Aradia
+    = June
+    | Rose
+    | Dave
+    | Jade
+    | Aradia
     | Tavros
     | Sollux
     | Karkat
@@ -52,11 +56,29 @@ type Character
     | Gamzee
     | Eridan
     | Feferi
+    | Jane
+    | Dirk
+    | Roxy
+    | Jake
+    | Calliope
+    | Caliborn
 
 
 characterToColor : Character -> String
 characterToColor color =
     case color of
+        June ->
+            "#0715cd"
+
+        Rose ->
+            "#b536da"
+
+        Dave ->
+            "#e00707"
+
+        Jade ->
+            "#4ac925"
+
         Aradia ->
             "#a10000"
 
@@ -93,6 +115,24 @@ characterToColor color =
         Feferi ->
             "#77003c"
 
+        Jane ->
+            "#00d5f2"
+
+        Dirk ->
+            "#f2a400"
+
+        Roxy ->
+            "#ff6ff2"
+
+        Jake ->
+            "#1f9400"
+
+        Calliope ->
+            "#929292"
+
+        Caliborn ->
+            "#323232"
+
 
 next : ( Character, Graphics ) -> ( Character, Graphics )
 next ( color, graphics ) =
@@ -109,8 +149,20 @@ previous ( color, graphics ) =
 
 
 nextCharacter : Character -> Character
-nextCharacter color =
-    case color of
+nextCharacter character =
+    case character of
+        June ->
+            Rose
+
+        Rose ->
+            Dave
+
+        Dave ->
+            Jade
+
+        Jade ->
+            Karkat
+
         Aradia ->
             Nepeta
 
@@ -118,7 +170,7 @@ nextCharacter color =
             Vriska
 
         Sollux ->
-            Karkat
+            Jane
 
         Karkat ->
             Terezi
@@ -146,46 +198,38 @@ nextCharacter color =
 
         Feferi ->
             Sollux
+
+        Jane ->
+            Dirk
+
+        Dirk ->
+            Roxy
+
+        Roxy ->
+            Jake
+
+        Jake ->
+            Calliope
+
+        Calliope ->
+            Caliborn
+
+        Caliborn ->
+            June
 
 
 previousCharacter : Character -> Character
-previousCharacter color =
-    case color of
-        Nepeta ->
-            Aradia
+previousCharacter character =
+    let
+        go : Character -> Character
+        go candidate =
+            if nextCharacter candidate == character then
+                candidate
 
-        Vriska ->
-            Tavros
-
-        Karkat ->
-            Sollux
-
-        Terezi ->
-            Karkat
-
-        Eridan ->
-            Nepeta
-
-        Equius ->
-            Kanaya
-
-        Gamzee ->
-            Terezi
-
-        Kanaya ->
-            Vriska
-
-        Aradia ->
-            Equius
-
-        Tavros ->
-            Gamzee
-
-        Feferi ->
-            Eridan
-
-        Sollux ->
-            Feferi
+            else
+                go (nextCharacter candidate)
+    in
+    go character
 
 
 nextGraphics : Graphics -> Graphics

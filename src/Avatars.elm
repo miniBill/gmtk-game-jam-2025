@@ -26,10 +26,80 @@ characterToAvatar :
 characterToAvatar ( color, graphics ) =
     { circleBg = True
     , clothes = Clothes.GraphicShirt (Types.characterToColor color) graphics
-    , skinTone = "#c4c4c4"
+    , skinTone = characterToSkinTone color
     , face = characterToFace color
     , top = characterToTop color
     }
+
+
+characterToSkinTone : Character -> SkinTone
+characterToSkinTone character =
+    case character of
+        June ->
+            "#ffffff"
+
+        Rose ->
+            "#ffffff"
+
+        Dave ->
+            "#ffffff"
+
+        Jade ->
+            "#ffffff"
+
+        Aradia ->
+            "#c4c4c4"
+
+        Tavros ->
+            "#c4c4c4"
+
+        Sollux ->
+            "#c4c4c4"
+
+        Karkat ->
+            "#c4c4c4"
+
+        Nepeta ->
+            "#c4c4c4"
+
+        Kanaya ->
+            "#c4c4c4"
+
+        Terezi ->
+            "#c4c4c4"
+
+        Vriska ->
+            "#c4c4c4"
+
+        Equius ->
+            "#c4c4c4"
+
+        Gamzee ->
+            "#c4c4c4"
+
+        Eridan ->
+            "#c4c4c4"
+
+        Feferi ->
+            "#c4c4c4"
+
+        Jane ->
+            "#ffffff"
+
+        Dirk ->
+            "#ffffff"
+
+        Roxy ->
+            "#ffffff"
+
+        Jake ->
+            "#ffffff"
+
+        Calliope ->
+            "#0b4100"
+
+        Caliborn ->
+            "#0b4100"
 
 
 characterToFace : Character -> Face
@@ -154,4 +224,7 @@ characterToTop color =
             hairColorAccessoryFacialHair Top.ShortHairShortCurly
 
         Feferi ->
+            Top.TopHairColorAccessoryFacialHair Top.LongHairBigHair HairColor.black Accessory.Kurt FacialHair.Blank
+
+        _ ->
             Top.TopHairColorAccessoryFacialHair Top.LongHairBigHair HairColor.black Accessory.Kurt FacialHair.Blank
