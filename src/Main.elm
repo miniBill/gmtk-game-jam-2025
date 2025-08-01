@@ -68,7 +68,7 @@ type alias InGameModel =
     , mainSeed : Random.Seed
     , game : Game
     , previousBest : List Float
-    , alwaysShowCardNumber : Bool
+    , easyMode : Bool
     }
 
 
@@ -94,7 +94,7 @@ type Game
 type Msg
     = GeneratedSeed Random.Seed
     | PickedAvatar ( Character, Graphics )
-    | AlwaysShowCardNumber Bool
+    | EasyMode Bool
     | GameMsg GameMsg
 
 
@@ -139,13 +139,13 @@ update msg model =
         ( GeneratedSeed _, _ ) ->
             ( model, Cmd.none )
 
-        ( AlwaysShowCardNumber alwaysShowCardNumber, PickingAvatar pickingModel ) ->
+        ( EasyMode alwaysShowCardNumber, PickingAvatar pickingModel ) ->
             ( PickingAvatar { pickingModel | alwaysShowCardNumber = alwaysShowCardNumber }, Cmd.none )
 
-        ( AlwaysShowCardNumber alwaysShowCardNumber, InGame inGameModel ) ->
-            ( InGame { inGameModel | alwaysShowCardNumber = alwaysShowCardNumber }, Cmd.none )
+        ( EasyMode alwaysShowCardNumber, InGame inGameModel ) ->
+            ( InGame { inGameModel | easyMode = alwaysShowCardNumber }, Cmd.none )
 
-        ( AlwaysShowCardNumber _, _ ) ->
+        ( EasyMode _, _ ) ->
             ( model, Cmd.none )
 
         ( PickedAvatar avatar, PickingAvatar { generatedSeed, alwaysShowCardNumber } ) ->
@@ -162,7 +162,7 @@ update msg model =
                         , mainSeed = seed
                         , game = DrawingInitialHand
                         , previousBest = []
-                        , alwaysShowCardNumber = alwaysShowCardNumber
+                        , easyMode = alwaysShowCardNumber
                         }
             in
             ( newModel
@@ -319,7 +319,7 @@ update msg model =
                         , game = DrawingInitialHand
                         , mainSeed = seed
                         , previousBest = playerScore inGameModel.discardPile :: inGameModel.previousBest
-                        , alwaysShowCardNumber = inGameModel.alwaysShowCardNumber
+                        , easyMode = inGameModel.easyMode
                         }
                     , Cmd.none
                     )
@@ -341,7 +341,7 @@ update msg model =
                                 , mainSeed = seed
                                 , game = DrawingInitialHand
                                 , previousBest = []
-                                , alwaysShowCardNumber = inGameModel.alwaysShowCardNumber
+                                , easyMode = inGameModel.easyMode
                                 }
                     in
                     ( newModel
@@ -505,6 +505,19 @@ view model =
                     , g [ transform [ Translate 0 3 ] ] [ viewAvatar inGameModel.currentAvatar ]
                     , g [ transform [ Translate 6.3 0 ] ] (viewPreviousBest inGameModel.previousBest)
                     , g [ transform [ Translate 6.3 3 ] ] (viewPlayerScore inGameModel.discardPile currentPlay)
+                    , centeredText
+                        [ x (gameWidth / 2)
+                        , y 4.1
+                        , fill (Paint Color.white)
+                        , onClick (EasyMode (not inGameModel.easyMode))
+                        , cursor CursorPointer
+                        ]
+                        [ if inGameModel.easyMode then
+                            text "✅ Easy mode"
+
+                          else
+                            text "⬜ Easy mode"
+                        ]
                     , g [ id "cards" ] (viewCards inGameModel)
                     ]
     in
@@ -755,8 +768,7 @@ viewPlayerCard inGameModel card =
                                 { x = deckLerp index
                                 , y = 2
                                 , card = card
-                                , alwaysShowCardNumber = inGameModel.alwaysShowCardNumber
-                                , cardState = FaceDown
+                                , cardState = FaceDown { showCardNumber = False }
                                 }
                         )
 
@@ -770,8 +782,7 @@ viewPlayerCard inGameModel card =
                                 { x = 6 + deckLerp index
                                 , y = 2
                                 , card = card
-                                , alwaysShowCardNumber = inGameModel.alwaysShowCardNumber
-                                , cardState = FaceDown
+                                , cardState = FaceDown { showCardNumber = False }
                                 }
                         )
 
@@ -796,7 +807,6 @@ viewPlayerCard inGameModel card =
                                                 { x = 1 + toFloat index * (cardWidth + 0.2)
                                                 , y = 2
                                                 , card = card
-                                                , alwaysShowCardNumber = inGameModel.alwaysShowCardNumber
                                                 , cardState = FaceUp
                                                 }
                                         )
@@ -821,7 +831,6 @@ viewPlayerCard inGameModel card =
                                                 { x = 1 + toFloat index * (cardWidth + 0.2)
                                                 , y = 3
                                                 , card = card
-                                                , alwaysShowCardNumber = inGameModel.alwaysShowCardNumber
                                                 , cardState = FaceUp
                                                 }
                                         )
@@ -847,7 +856,6 @@ viewPlayerCard inGameModel card =
                                                     else
                                                         2
                                                 , card = card
-                                                , alwaysShowCardNumber = inGameModel.alwaysShowCardNumber
                                                 , cardState =
                                                     case compare (cardValue p) (cardValue o) of
                                                         LT ->
@@ -925,8 +933,7 @@ viewOpponentCard inGameModel card =
                                 { x = deckLerp index
                                 , y = 1
                                 , card = card
-                                , alwaysShowCardNumber = inGameModel.alwaysShowCardNumber
-                                , cardState = FaceDown
+                                , cardState = FaceDown { showCardNumber = False }
                                 }
                         )
 
@@ -940,8 +947,7 @@ viewOpponentCard inGameModel card =
                                 { x = 6 + deckLerp index
                                 , y = 1
                                 , card = card
-                                , alwaysShowCardNumber = inGameModel.alwaysShowCardNumber
-                                , cardState = FaceDown
+                                , cardState = FaceDown { showCardNumber = False }
                                 }
                         )
 
@@ -960,8 +966,7 @@ viewOpponentCard inGameModel card =
                                         { x = 1 + toFloat index * (cardWidth + 0.2)
                                         , y = 0
                                         , card = card
-                                        , alwaysShowCardNumber = inGameModel.alwaysShowCardNumber
-                                        , cardState = FaceDown
+                                        , cardState = FaceDown { showCardNumber = inGameModel.easyMode }
                                         }
                                 )
                     ]
@@ -980,7 +985,6 @@ viewOpponentCard inGameModel card =
                                             else
                                                 1
                                         , card = card
-                                        , alwaysShowCardNumber = inGameModel.alwaysShowCardNumber
                                         , cardState =
                                             case compare (cardValue p) (cardValue o) of
                                                 LT ->
@@ -1138,7 +1142,7 @@ playerScore pile =
 
 
 type CardState
-    = FaceDown
+    = FaceDown { showCardNumber : Bool }
     | FaceUp
     | Desaturated
 
@@ -1150,7 +1154,6 @@ viewCard :
         , y : Float
         , cardState : CardState
         , card : Card kind
-        , alwaysShowCardNumber : Bool
         }
     -> Svg msg
 viewCard attrs config =
@@ -1189,7 +1192,7 @@ viewCard attrs config =
                                 , hue = (toFloat (cardValue config.card) - 1) / deckSize
                                 }
 
-                        FaceDown ->
+                        FaceDown _ ->
                             Color.darkGreen
             in
             rect
@@ -1234,8 +1237,8 @@ viewCard attrs config =
                             [ text (String.fromInt (cardValue config.card)) ]
                         ]
 
-                    FaceDown ->
-                        [ if config.alwaysShowCardNumber then
+                    FaceDown { showCardNumber } ->
+                        [ if showCardNumber then
                             centeredText
                                 [ x (cardWidth / 2 + margin)
                                 , y (cardHeight / 2 + margin)
