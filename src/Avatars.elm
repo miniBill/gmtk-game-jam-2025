@@ -116,6 +116,9 @@ characterToMouth character =
         June ->
             Mouth.Smile
 
+        Rose ->
+            Mouth.Twinkle
+
         Aradia ->
             Mouth.Smile
 
@@ -175,6 +178,9 @@ characterToEyes character =
         June ->
             Eyes.WinkWacky
 
+        Rose ->
+            Eyes.Side
+
         Aradia ->
             Eyes.Dizzy
 
@@ -213,6 +219,9 @@ characterToTop character =
     case character of
         June ->
             Top.TopHairColorAccessoryFacialHair Top.ShortHairShaggyMullet HairColor.black Accessory.Prescription01 FacialHair.Blank
+
+        Rose ->
+            Top.TopHairColorAccessoryFacialHair Top.LongHairFroBand HairColor.silverGray Accessory.Blank FacialHair.Blank
 
         Aradia ->
             hairColorAccessoryFacialHair Top.LongHairCurvy

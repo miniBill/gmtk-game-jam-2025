@@ -15,17 +15,30 @@ import Avataaars.SkinTone exposing (SkinTone)
 import Avataaars.Top as Top exposing (Top(..))
 import Avatars
 import Browser
+import Color
 import List.Extra
-import TypedSvg exposing (g, svg, title)
-import TypedSvg.Attributes exposing (cursor, transform, viewBox)
+import TypedSvg exposing (g, svg, tspan)
+import TypedSvg.Attributes exposing (cursor, fill, transform, viewBox)
+import TypedSvg.Attributes.InEm
+import TypedSvg.Attributes.InPx exposing (fontSize, x, y)
 import TypedSvg.Core exposing (Svg, text)
 import TypedSvg.Events exposing (onClick)
-import TypedSvg.Types exposing (Cursor(..), Transform(..))
+import TypedSvg.Extra exposing (centeredText)
+import TypedSvg.Types exposing (Cursor(..), Paint(..), Transform(..))
 import Types exposing (Character(..))
 
 
+type alias Config =
+    { circleBg : Bool
+    , clothes : Clothes
+    , skinTone : SkinTone
+    , face : Face
+    , top : Top
+    }
+
+
 type alias Model =
-    Maybe ( Character, Graphics )
+    Maybe ( Character, Graphics, Config )
 
 
 type alias Msg =
@@ -59,10 +72,6 @@ main =
 view : Model -> Svg Msg
 view model =
     let
-        scale : number
-        scale =
-            100
-
         perRow : Int
         perRow =
             list
@@ -70,96 +79,23 @@ view model =
                 |> List.maximum
                 |> Maybe.withDefault 1
 
-        list :
-            List
-                (List
-                    ( Maybe ( Character, Graphics )
-                    , String
-                    , { circleBg : Bool
-                      , clothes : Clothes
-                      , skinTone : SkinTone
-                      , face : Face
-                      , top : Top
-                      }
-                    )
-                )
+        list : List (List ( Msg, Config ))
         list =
             case model of
-                Just focused ->
-                    let
-                        ({ face } as base) =
-                            Avatars.characterToAvatar focused
-
-                        withTops :
-                            List
-                                (List
-                                    ( Maybe ( Character, Graphics )
-                                    , String
-                                    , { circleBg : Bool
-                                      , clothes : Clothes
-                                      , skinTone : SkinTone
-                                      , face : Face
-                                      , top : Top
-                                      }
-                                    )
-                                )
-                        withTops =
-                            List.map
-                                (\top ->
-                                    ( Nothing
-                                    , Debug.toString top
-                                    , { base | top = top }
-                                    )
-                                )
-                                (allTops base.top)
-                                |> makeGroups 3
-                    in
-                    [ ( Nothing, "Current", base ) ]
-                        :: withTops
-                        ++ [ List.map
-                                (\top ->
-                                    ( Nothing
-                                    , Debug.toString top
-                                    , { base | top = top }
-                                    )
-                                )
-                                (List.filterMap
-                                    (\accessory -> withAccessory accessory base.top)
-                                    allAccessories
-                                )
-                           , List.map
-                                (\eyebrow ->
-                                    ( Nothing
-                                    , Debug.toString eyebrow
-                                    , { base | face = { face | eyebrow = eyebrow } }
-                                    )
-                                )
-                                allEyebrows
-                           , List.map
-                                (\eyes ->
-                                    ( Nothing
-                                    , Debug.toString eyes
-                                    , { base | face = { face | eyes = eyes } }
-                                    )
-                                )
-                                allEyes
-                           , List.map
-                                (\mouth ->
-                                    ( Nothing
-                                    , Debug.toString mouth
-                                    , { base | face = { face | mouth = mouth } }
-                                    )
-                                )
-                                allMouths
-                           ]
+                Just selected ->
+                    allVariants selected
 
                 Nothing ->
                     allCharacters
                         |> List.map
-                            (\c ->
-                                ( Just c
-                                , Debug.toString (Tuple.first c)
-                                , Avatars.characterToAvatar c
+                            (\( character, graphics ) ->
+                                let
+                                    config : Config
+                                    config =
+                                        Avatars.characterToAvatar ( character, graphics )
+                                in
+                                ( Just ( character, graphics, config )
+                                , config
                                 )
                             )
                         |> List.Extra.greedyGroupsOf 4
@@ -168,32 +104,142 @@ view model =
         |> List.indexedMap
             (\cy ->
                 List.indexedMap
-                    (\cx ( msg, label, config ) ->
+                    (\cx ( msg, config ) ->
                         g
                             [ transform
                                 [ Translate
-                                    (cx |> toFloat |> (*) scale)
-                                    (cy |> toFloat |> (*) scale)
+                                    (toFloat cx)
+                                    (toFloat cy)
                                 ]
                             , onClick msg
                             , cursor CursorPointer
                             ]
                             [ Avataaars.view
-                                { width = scale
-                                , height = scale
+                                { width = 1
+                                , height = 1
                                 }
                                 config
-                            , title [] [ text label ]
                             ]
                     )
             )
         |> List.concat
+        |> (::)
+            (textBlock { x = toFloat perRow / 2, y = 0 }
+                (case model of
+                    Nothing ->
+                        []
+
+                    Just selected ->
+                        viewChanges selected
+                )
+            )
         |> svg
             [ viewBox
-                (-scale / 10)
-                (-scale / 10)
-                (0.2 * scale + scale * toFloat perRow)
-                (0.2 * scale + scale * toFloat (List.length list))
+                -0.1
+                -0.1
+                (0.2 + toFloat perRow)
+                (0.2 + toFloat (List.length list))
+            , fontSize 0.2
+            ]
+
+
+viewChanges : ( Character, Graphics, Config ) -> List String
+viewChanges ( character, graphics, config ) =
+    let
+        default : Config
+        default =
+            Avatars.characterToAvatar ( character, graphics )
+
+        line : String -> (Config -> a) -> Maybe String
+        line label acc =
+            if acc default == acc config then
+                Nothing
+
+            else
+                Just ("Changed " ++ label ++ " to " ++ Debug.toString (acc config))
+    in
+    [ line "Top" .top
+    , line "Eyebrow" (.face >> .eyebrow)
+    , line "Eyes" (.face >> .eyes)
+    , line "Mouth" (.face >> .mouth)
+    ]
+        |> List.filterMap identity
+
+
+allVariants :
+    ( Character, Graphics, Config )
+    -> List (List ( Msg, Config ))
+allVariants ( character, graphics, { face } as current ) =
+    let
+        base : Config
+        base =
+            Avatars.characterToAvatar ( character, graphics )
+
+        withTops : List (List Config)
+        withTops =
+            List.map
+                (\top -> { current | top = top })
+                (allTops current.top)
+                |> makeGroups 3
+    in
+    (if base == current then
+        [ ( Nothing, current )
+        ]
+
+     else
+        [ ( Nothing, base )
+        , ( Nothing, current )
+        ]
+    )
+        :: (withTops
+                ++ [ List.map
+                        (\top -> { current | top = top })
+                        (List.filterMap
+                            (\accessory -> withAccessory accessory current.top)
+                            allAccessories
+                        )
+                   , List.map
+                        (\eyebrow ->
+                            { current | face = { face | eyebrow = eyebrow } }
+                        )
+                        allEyebrows
+                   , List.map
+                        (\eyes ->
+                            { current | face = { face | eyes = eyes } }
+                        )
+                        allEyes
+                   , List.map
+                        (\mouth ->
+                            { current | face = { face | mouth = mouth } }
+                        )
+                        allMouths
+                   ]
+                |> List.map
+                    (List.map
+                        (\config ->
+                            ( Just ( character, graphics, config )
+                            , config
+                            )
+                        )
+                    )
+           )
+
+
+textBlock : { x : Float, y : Float } -> List String -> Svg Msg
+textBlock attrs lines =
+    lines
+        |> List.map
+            (\line ->
+                tspan
+                    [ x attrs.x
+                    , TypedSvg.Attributes.InEm.dy 1.2
+                    ]
+                    [ text line ]
+            )
+        |> centeredText
+            [ x attrs.x
+            , y attrs.y
+            , fill (Paint Color.white)
             ]
 
 
@@ -214,12 +260,17 @@ makeGroups count list =
 allEyebrows : List Eyebrow
 allEyebrows =
     [ Eyebrow.Angry
+    , Eyebrow.AngryNatural
     , Eyebrow.Default
+    , Eyebrow.DefaultNatural
     , Eyebrow.FlatNatural
     , Eyebrow.RaisedExcited
+    , Eyebrow.RaisedExcitedNatural
     , Eyebrow.SadConcerned
+    , Eyebrow.SadConcernedNatural
     , Eyebrow.UnibrowNatural
     , Eyebrow.UpDown
+    , Eyebrow.UpDownNatural
     ]
 
 
