@@ -8,10 +8,8 @@ import Color exposing (Color)
 import Color.Extra exposing (colorFromHex)
 import Color.Oklch as Oklch
 import List.Extra
-import Process
 import Random
 import Random.List
-import Task
 import TypedSvg exposing (g, rect, svg, tspan)
 import TypedSvg.Attributes exposing (class, cursor, dominantBaseline, fill, id, stroke, style, transform, viewBox)
 import TypedSvg.Attributes.InEm
@@ -113,13 +111,13 @@ main =
 init : flags -> ( Model, Cmd Msg )
 init _ =
     ( GeneratingSeed
-    , let
-        _ =
-            Debug.todo
-      in
-      Random.initialSeed 413
-        |> Random.constant
-        |> Random.generate GeneratedSeed
+    , if smol then
+        Random.initialSeed 413
+            |> Random.constant
+            |> Random.generate GeneratedSeed
+
+      else
+        Random.independentSeed |> Random.generate GeneratedSeed
     )
 
 
@@ -143,7 +141,7 @@ update msg model =
                         }
             in
             ( newModel
-            , Process.sleep 2000 |> Task.perform (\_ -> GameMsg NextRound)
+            , Cmd.none
             )
 
         ( GameMsg gameMsg, InGame inGameModel ) ->
@@ -198,7 +196,7 @@ update msg model =
                           }
                             |> PlayedHand
                             |> stillInGame
-                        , Process.sleep 4000 |> Task.perform (\_ -> GameMsg NextRound)
+                        , Cmd.none
                         )
 
                     else
@@ -294,7 +292,7 @@ update msg model =
                         , mainSeed = seed
                         , previousBest = playerScore inGameModel.discardPile :: inGameModel.previousBest
                         }
-                    , Process.sleep 2000 |> Task.perform (\_ -> GameMsg NextRound)
+                    , Cmd.none
                     )
 
                 ( NextLoop, _ ) ->
@@ -317,17 +315,16 @@ update msg model =
                                 }
                     in
                     ( newModel
-                    , Process.sleep 2000 |> Task.perform (\_ -> GameMsg NextRound)
+                    , Cmd.none
                     )
 
                 ( NextGame, _ ) ->
                     ( model, Cmd.none )
 
-        _ ->
-            let
-                _ =
-                    Debug.log "Wrong combination" ( msg, model )
-            in
+        ( GeneratedSeed _, InGame _ ) ->
+            ( model, Cmd.none )
+
+        ( GameMsg _, GeneratingSeed ) ->
             ( model, Cmd.none )
 
 
@@ -399,7 +396,7 @@ view model =
                     , g []
                         (case inGameModel.game of
                             DrawingInitialHand ->
-                                []
+                                [ bottomButton (GameMsg NextRound) "Start game" ]
 
                             PreparingHand preparingModel ->
                                 List.filterMap identity
@@ -407,7 +404,7 @@ view model =
                                     ]
 
                             PlayedHand _ ->
-                                []
+                                [ bottomButton (GameMsg NextRound) "Next hand" ]
 
                             GameFinished ->
                                 let
@@ -441,66 +438,55 @@ view model =
                                         , bottomButton (GameMsg NextLoop) "Next loop"
                                         ]
 
-                                    previousBest :: _ ->
+                                    previousBest :: tail ->
                                         if previousBest < finalPlayerScore then
-                                            [ centeredText
-                                                [ x 3.5
-                                                , y 1.4
-                                                , fill (Paint Color.white)
-                                                ]
-                                                [ tspan
-                                                    [ x 3.5
-                                                    , TypedSvg.Attributes.InEm.dy 1.2
-                                                    ]
-                                                    [ text ("Your final score is " ++ String.fromFloat finalPlayerScore ++ ".") ]
-                                                , tspan
-                                                    [ x 3.5
-                                                    , TypedSvg.Attributes.InEm.dy 1.2
-                                                    ]
-                                                    [ text "That's slightly better," ]
-                                                , tspan
-                                                    [ x 3.5
-                                                    , TypedSvg.Attributes.InEm.dy 1.2
-                                                    ]
-                                                    [ text "think you can do more?" ]
-                                                ]
+                                            [ [ "Your final score is "
+                                                    ++ String.fromFloat finalPlayerScore
+                                                    ++ "."
+                                              , "That's slightly better,"
+                                              , "think you can do more?"
+                                              ]
+                                                |> textBlock
+                                                    { x = 3.5
+                                                    , y = 1.4
+                                                    , color = Color.white
+                                                    }
                                             , bottomButton (GameMsg NextLoop) "Next loop"
                                             ]
 
                                         else
-                                            [ centeredText
-                                                [ x 3.5
-                                                , y 1.4
-                                                , fill (Paint Color.white)
-                                                ]
-                                                [ tspan
-                                                    [ x 3.5
-                                                    , TypedSvg.Attributes.InEm.dy 1.2
-                                                    ]
-                                                    [ text ("Your final score is " ++ String.fromFloat finalPlayerScore ++ ".") ]
-                                                , tspan
-                                                    [ x 3.5
-                                                    , TypedSvg.Attributes.InEm.dy 1.2
-                                                    ]
-                                                    [ text ("That's worse than " ++ String.fromFloat previousBest) ]
-                                                , tspan
-                                                    [ x 3.5
-                                                    , TypedSvg.Attributes.InEm.dy 1.2
-                                                    ]
-                                                    [ text "You managed to improve your score" ]
-                                                , tspan
-                                                    [ x 3.5
-                                                    , TypedSvg.Attributes.InEm.dy 1.2
-                                                    ]
-                                                    [ text
-                                                        (if List.length inGameModel.previousBest == 1 then
-                                                            "only once before failing."
+                                            [ ([ "Your final score is "
+                                                    ++ String.fromFloat finalPlayerScore
+                                                    ++ "."
+                                               , if previousBest == finalPlayerScore then
+                                                    "That's not better than "
+                                                        ++ String.fromFloat previousBest
 
-                                                         else
-                                                            String.fromInt (List.length inGameModel.previousBest) ++ " times."
-                                                        )
-                                                    ]
-                                                ]
+                                                 else
+                                                    "That's worse than "
+                                                        ++ String.fromFloat previousBest
+                                               ]
+                                                ++ (case tail of
+                                                        [] ->
+                                                            [ "You failed to improve your score at all."
+                                                            ]
+
+                                                        [ _ ] ->
+                                                            [ "You managed to improve your"
+                                                            , "score only once before failing."
+                                                            ]
+
+                                                        _ ->
+                                                            [ "You managed to improve your"
+                                                            , "score " ++ String.fromInt (List.length inGameModel.previousBest) ++ " times before failing."
+                                                            ]
+                                                   )
+                                              )
+                                                |> textBlock
+                                                    { x = 3.5
+                                                    , y = 1.3
+                                                    , color = Color.white
+                                                    }
                                             , bottomButton (GameMsg NextGame) "Try again"
                                             ]
                         )
@@ -518,6 +504,24 @@ view model =
         , style "transform: perspective(1)"
         ]
         children
+
+
+textBlock : { x : Float, y : Float, color : Color } -> List String -> Svg Msg
+textBlock attrs lines =
+    lines
+        |> List.map
+            (\line ->
+                tspan
+                    [ x attrs.x
+                    , TypedSvg.Attributes.InEm.dy 1.2
+                    ]
+                    [ text line ]
+            )
+        |> centeredText
+            [ x attrs.x
+            , y attrs.y
+            , fill (Paint attrs.color)
+            ]
 
 
 viewPreviousBest : List Float -> List (Svg msg)
@@ -546,6 +550,11 @@ viewPreviousBest previousBest =
 
 viewPlayerScore : List ( Card Player, Card Opponent ) -> Maybe (List ( Card Player, Card Opponent )) -> List (Svg Msg)
 viewPlayerScore discard play =
+    let
+        before : String
+        before =
+            String.fromFloat (playerScore discard)
+    in
     [ centeredText
         [ x 0.5
         , y 0.45
@@ -561,10 +570,19 @@ viewPlayerScore discard play =
         ]
         [ case play of
             Nothing ->
-                text (String.fromFloat (playerScore discard))
+                text before
 
             Just p ->
-                text (String.fromFloat (playerScore discard) ++ " => " ++ String.fromFloat (playerScore (discard ++ p)))
+                let
+                    after : String
+                    after =
+                        String.fromFloat (playerScore (discard ++ p))
+                in
+                if before == after then
+                    text before
+
+                else
+                    text (before ++ " => " ++ after)
         ]
     ]
 
