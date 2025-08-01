@@ -55,6 +55,10 @@ main =
 view : Model -> Svg Msg
 view model =
     let
+        scale : number
+        scale =
+            100
+
         perRow : number
         perRow =
             8
@@ -104,15 +108,15 @@ view model =
                 g
                     [ transform
                         [ Translate
-                            (modBy perRow i |> toFloat)
-                            ((i // perRow) |> toFloat)
+                            (modBy perRow i |> toFloat |> (*) scale)
+                            ((i // perRow) |> toFloat |> (*) scale)
                         ]
                     , onClick msg
                     , cursor CursorPointer
                     ]
                     [ Avataaars.view
-                        { width = 1
-                        , height = 1
+                        { width = scale
+                        , height = scale
                         }
                         config
                     , title [] [ text label ]
@@ -120,10 +124,10 @@ view model =
             )
         |> svg
             [ viewBox
-                -0.1
-                -0.1
-                (perRow + 0.2)
-                (1.2 + toFloat ((List.length list + 3) // perRow))
+                (-scale / 10)
+                (-scale / 10)
+                (perRow * scale + 0.2 * scale)
+                (0.2 * scale + scale * toFloat ((List.length list + 3) // perRow))
             ]
 
 
