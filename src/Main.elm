@@ -353,7 +353,7 @@ view model =
 
         gameWidth : Float
         gameWidth =
-            7.2
+            7.7
 
         gameHeight : number
         gameHeight =
@@ -405,7 +405,19 @@ view model =
                                     ]
 
                             PlayedHand _ ->
-                                [ bottomButton (GameMsg NextRound) "Next hand" ]
+                                let
+                                    lastHand : Bool
+                                    lastHand =
+                                        (List.length inGameModel.discardPile
+                                            + handSize
+                                        )
+                                            == List.length inGameModel.initialDeck
+                                in
+                                if lastHand then
+                                    [ bottomButton (GameMsg NextRound) "Final score" ]
+
+                                else
+                                    [ bottomButton (GameMsg NextRound) "Next hand" ]
 
                             GameFinished ->
                                 let
@@ -473,7 +485,8 @@ view model =
                                                ]
                                                 ++ (case tail of
                                                         [] ->
-                                                            [ "You failed to improve your score at all."
+                                                            [ "You failed to improve"
+                                                            , "your score at all."
                                                             ]
 
                                                         [ _ ] ->
@@ -495,7 +508,7 @@ view model =
                                               )
                                                 |> textBlock
                                                     { x = 3.5
-                                                    , y = 1.3
+                                                    , y = 1.25
                                                     , color = Color.white
                                                     }
                                             , bottomButton (GameMsg NextGame) "Try again"
@@ -503,8 +516,8 @@ view model =
                         )
                     , viewAvatar (Types.previous inGameModel.currentAvatar)
                     , g [ transform [ Translate 0 3 ] ] [ viewAvatar inGameModel.currentAvatar ]
-                    , g [ transform [ Translate 6 0 ] ] (viewPreviousBest inGameModel.previousBest)
-                    , g [ transform [ Translate 6 3 ] ] (viewPlayerScore inGameModel.discardPile currentPlay)
+                    , g [ transform [ Translate 6.3 0 ] ] (viewPreviousBest inGameModel.previousBest)
+                    , g [ transform [ Translate 6.3 3 ] ] (viewPlayerScore inGameModel.discardPile currentPlay)
                     , g [ id "cards" ] (viewCards model)
                     ]
     in
@@ -557,7 +570,7 @@ viewPreviousBest previousBest =
             [ previousBest
                 |> List.reverse
                 |> List.map String.fromFloat
-                |> String.join ", "
+                |> String.join " \u{00A0}"
                 |> text
             ]
         ]
@@ -1019,7 +1032,15 @@ viewCard attrs config =
 
          else
             [ cardRect
-            , if smol then
+            , if
+                smol
+                    || (let
+                            _ =
+                                Debug.todo
+                        in
+                        True
+                       )
+              then
                 centeredText
                     [ x (cardWidth / 2 + margin)
                     , y (cardHeight / 2 + margin)
