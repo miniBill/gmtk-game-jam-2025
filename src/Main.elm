@@ -866,7 +866,7 @@ viewPlayerCard inGameModel card =
                                                 { x = 1 + toFloat index * (cardWidth + 0.2)
                                                 , y =
                                                     if cardValue p > cardValue o then
-                                                        1.75
+                                                        1.7
 
                                                     else
                                                         2
@@ -995,7 +995,7 @@ viewOpponentCard inGameModel card =
                                         { x = 1 + toFloat index * (cardWidth + 0.2)
                                         , y =
                                             if cardValue o > cardValue p then
-                                                1.25
+                                                1.3
 
                                             else
                                                 1
