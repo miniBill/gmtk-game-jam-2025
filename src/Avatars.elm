@@ -2,13 +2,13 @@ module Avatars exposing (characterToAvatar)
 
 import Avataaars.Accessory as Accessory
 import Avataaars.Clothes as Clothes exposing (Clothes)
-import Avataaars.Eyebrow as Eyebrow
-import Avataaars.Eyes as Eyes
+import Avataaars.Eyebrow as Eyebrow exposing (Eyebrow)
+import Avataaars.Eyes as Eyes exposing (Eyes)
 import Avataaars.Face exposing (Face)
 import Avataaars.FacialHair as FacialHair
 import Avataaars.Graphics exposing (Graphics)
 import Avataaars.HairColor as HairColor
-import Avataaars.Mouth as Mouth
+import Avataaars.Mouth as Mouth exposing (Mouth)
 import Avataaars.SkinTone exposing (SkinTone)
 import Avataaars.Top as Top exposing (Top)
 import Types exposing (Character(..))
@@ -103,93 +103,111 @@ characterToSkinTone character =
 
 
 characterToFace : Character -> Face
-characterToFace color =
-    { mouth =
-        case color of
-            Aradia ->
-                Mouth.Smile
-
-            Sollux ->
-                Mouth.Serious
-
-            Karkat ->
-                Mouth.ScreamOpen
-
-            Nepeta ->
-                Mouth.Eating
-
-            Kanaya ->
-                Mouth.Twinkle
-
-            Equius ->
-                Mouth.Grimace
-
-            Vriska ->
-                Mouth.Smile
-
-            Gamzee ->
-                Mouth.Tongue
-
-            _ ->
-                Mouth.Default
-    , eyebrow =
-        case color of
-            Sollux ->
-                Eyebrow.Angry
-
-            Karkat ->
-                Eyebrow.Angry
-
-            Vriska ->
-                Eyebrow.Angry
-
-            Gamzee ->
-                Eyebrow.UnibrowNatural
-
-            Eridan ->
-                Eyebrow.UpDown
-
-            _ ->
-                Eyebrow.Default
-    , eyes =
-        case color of
-            Aradia ->
-                Eyes.Dizzy
-
-            Sollux ->
-                Eyes.EyeRoll
-
-            Nepeta ->
-                Eyes.Hearts
-
-            Kanaya ->
-                Eyes.Side
-
-            Terezi ->
-                Eyes.Close
-
-            Vriska ->
-                Eyes.Squint
-
-            Gamzee ->
-                Eyes.Surprised
-
-            Eridan ->
-                Eyes.Squint
-
-            _ ->
-                Eyes.Default
+characterToFace character =
+    { mouth = characterToMouth character
+    , eyebrow = characterToEyebrow character
+    , eyes = characterToEyes character
     }
 
 
+characterToMouth : Character -> Mouth
+characterToMouth character =
+    case character of
+        Aradia ->
+            Mouth.Smile
+
+        Sollux ->
+            Mouth.Serious
+
+        Karkat ->
+            Mouth.ScreamOpen
+
+        Nepeta ->
+            Mouth.Eating
+
+        Kanaya ->
+            Mouth.Twinkle
+
+        Equius ->
+            Mouth.Grimace
+
+        Vriska ->
+            Mouth.Smile
+
+        Gamzee ->
+            Mouth.Tongue
+
+        Caliborn ->
+            Mouth.Tongue
+
+        _ ->
+            Mouth.Default
+
+
+characterToEyebrow : Character -> Eyebrow
+characterToEyebrow character =
+    case character of
+        Sollux ->
+            Eyebrow.Angry
+
+        Karkat ->
+            Eyebrow.Angry
+
+        Vriska ->
+            Eyebrow.Angry
+
+        Gamzee ->
+            Eyebrow.UnibrowNatural
+
+        Eridan ->
+            Eyebrow.UpDown
+
+        _ ->
+            Eyebrow.Default
+
+
+characterToEyes : Character -> Eyes
+characterToEyes character =
+    case character of
+        Aradia ->
+            Eyes.Dizzy
+
+        Sollux ->
+            Eyes.EyeRoll
+
+        Nepeta ->
+            Eyes.Hearts
+
+        Kanaya ->
+            Eyes.Side
+
+        Terezi ->
+            Eyes.Close
+
+        Vriska ->
+            Eyes.Squint
+
+        Gamzee ->
+            Eyes.Surprised
+
+        Eridan ->
+            Eyes.Squint
+
+        _ ->
+            Eyes.Default
+
+
 characterToTop : Character -> Top
-characterToTop color =
+characterToTop character =
     let
         hairColorAccessoryFacialHair : Top.TopHairColorAccessoryFacialHair -> Top
         hairColorAccessoryFacialHair hair =
             Top.TopHairColorAccessoryFacialHair hair HairColor.black Accessory.Blank FacialHair.Blank
     in
-    case color of
+    case character of
+        June ->
+            hairColorAccessoryFacialHair Top.ShortHairShaggyMullet
+
         Aradia ->
             hairColorAccessoryFacialHair Top.LongHairCurvy
 
@@ -227,4 +245,4 @@ characterToTop color =
             Top.TopHairColorAccessoryFacialHair Top.LongHairBigHair HairColor.black Accessory.Kurt FacialHair.Blank
 
         _ ->
-            Top.TopHairColorAccessoryFacialHair Top.LongHairBigHair HairColor.black Accessory.Kurt FacialHair.Blank
+            Top.TopHairColorAccessoryFacialHair Top.LongHairBigHair HairColor.black Accessory.Blank FacialHair.Blank
