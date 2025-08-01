@@ -133,7 +133,7 @@ update msg model =
                 newModel : Model
                 newModel =
                     InGame
-                        { currentAvatar = ( Karkat, Skull )
+                        { currentAvatar = ( June, Skull )
                         , initialDeck = initialDeck
                         , discardPile = []
                         , mainSeed = seed
