@@ -7,6 +7,7 @@ import Browser
 import Color exposing (Color)
 import Color.Extra exposing (colorFromHex)
 import Color.Oklch as Oklch
+import Format
 import List.Extra
 import Random
 import Random.List
@@ -350,9 +351,9 @@ view model =
         border =
             0.1
 
-        gameWidth : number
+        gameWidth : Float
         gameWidth =
-            7
+            7.2
 
         gameHeight : number
         gameHeight =
@@ -423,7 +424,11 @@ view model =
                                                 [ x 3.5
                                                 , TypedSvg.Attributes.InEm.dy 1.2
                                                 ]
-                                                [ text ("Your final score is " ++ String.fromFloat finalPlayerScore ++ ".") ]
+                                                [ text
+                                                    ("Your final score is {final}."
+                                                        |> Format.float "final" finalPlayerScore
+                                                    )
+                                                ]
                                             , tspan
                                                 [ x 3.5
                                                 , TypedSvg.Attributes.InEm.dy 1.2
@@ -440,9 +445,8 @@ view model =
 
                                     previousBest :: tail ->
                                         if previousBest < finalPlayerScore then
-                                            [ [ "Your final score is "
-                                                    ++ String.fromFloat finalPlayerScore
-                                                    ++ "."
+                                            [ [ "Your final score is {final}."
+                                                    |> Format.float "final" finalPlayerScore
                                               , "That's slightly better,"
                                               , "think you can do more?"
                                               ]
@@ -455,16 +459,17 @@ view model =
                                             ]
 
                                         else
-                                            [ ([ "Your final score is "
-                                                    ++ String.fromFloat finalPlayerScore
-                                                    ++ "."
-                                               , if previousBest == finalPlayerScore then
-                                                    "That's not better than "
-                                                        ++ String.fromFloat previousBest
+                                            [ ([ "Your final score is {final}."
+                                                    |> Format.float "final" finalPlayerScore
+                                               , "That's {compare} than {previousBest}."
+                                                    |> Format.string "compare"
+                                                        (if previousBest == finalPlayerScore then
+                                                            "not better"
 
-                                                 else
-                                                    "That's worse than "
-                                                        ++ String.fromFloat previousBest
+                                                         else
+                                                            "worse"
+                                                        )
+                                                    |> Format.float "previousBest" previousBest
                                                ]
                                                 ++ (case tail of
                                                         [] ->
@@ -476,9 +481,15 @@ view model =
                                                             , "score only once before failing."
                                                             ]
 
+                                                        [ _, _ ] ->
+                                                            [ "You managed to improve your"
+                                                            , "score twice before failing."
+                                                            ]
+
                                                         _ ->
                                                             [ "You managed to improve your"
-                                                            , "score " ++ String.fromInt (List.length inGameModel.previousBest) ++ " times before failing."
+                                                            , "score {len} times before failing."
+                                                                |> Format.int "len" (List.length tail)
                                                             ]
                                                    )
                                               )
@@ -526,26 +537,30 @@ textBlock attrs lines =
 
 viewPreviousBest : List Float -> List (Svg msg)
 viewPreviousBest previousBest =
-    case previousBest of
-        [] ->
-            []
+    if List.isEmpty previousBest then
+        []
 
-        score :: _ ->
-            [ centeredText
-                [ x 0.5
-                , y 0.45
-                , fill (Paint Color.white)
-                , dominantBaseline DominantBaselineAuto
-                ]
-                [ text "Previous" ]
-            , centeredText
-                [ x 0.5
-                , y 0.55
-                , fill (Paint Color.white)
-                , dominantBaseline DominantBaselineHanging
-                ]
-                [ text (String.fromFloat score) ]
+    else
+        [ centeredText
+            [ x 0.5
+            , y 0.45
+            , fill (Paint Color.white)
+            , dominantBaseline DominantBaselineAuto
             ]
+            [ text "Previous" ]
+        , centeredText
+            [ x 0.5
+            , y 0.55
+            , fill (Paint Color.white)
+            , dominantBaseline DominantBaselineHanging
+            ]
+            [ previousBest
+                |> List.reverse
+                |> List.map String.fromFloat
+                |> String.join ", "
+                |> text
+            ]
+        ]
 
 
 viewPlayerScore : List ( Card Player, Card Opponent ) -> Maybe (List ( Card Player, Card Opponent )) -> List (Svg Msg)
