@@ -28,15 +28,6 @@ smallGame =
     False
 
 
-alwaysShowCardNumber : Bool
-alwaysShowCardNumber =
-    let
-        _ =
-            Debug.todo
-    in
-    True
-
-
 handSize : number
 handSize =
     if smallGame then
@@ -77,12 +68,13 @@ type alias InGameModel =
     , mainSeed : Random.Seed
     , game : Game
     , previousBest : List Float
+    , alwaysShowCardNumber : Bool
     }
 
 
 type Model
     = GeneratingSeed
-    | PickingAvatar Random.Seed
+    | PickingAvatar { generatedSeed : Random.Seed, alwaysShowCardNumber : Bool }
     | InGame InGameModel
 
 
@@ -102,6 +94,7 @@ type Game
 type Msg
     = GeneratedSeed Random.Seed
     | PickedAvatar ( Character, Graphics )
+    | AlwaysShowCardNumber Bool
     | GameMsg GameMsg
 
 
@@ -141,12 +134,21 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case ( msg, model ) of
         ( GeneratedSeed generatedSeed, GeneratingSeed ) ->
-            ( PickingAvatar generatedSeed, Cmd.none )
+            ( PickingAvatar { generatedSeed = generatedSeed, alwaysShowCardNumber = False }, Cmd.none )
 
         ( GeneratedSeed _, _ ) ->
             ( model, Cmd.none )
 
-        ( PickedAvatar avatar, PickingAvatar generatedSeed ) ->
+        ( AlwaysShowCardNumber alwaysShowCardNumber, PickingAvatar pickingModel ) ->
+            ( PickingAvatar { pickingModel | alwaysShowCardNumber = alwaysShowCardNumber }, Cmd.none )
+
+        ( AlwaysShowCardNumber alwaysShowCardNumber, InGame inGameModel ) ->
+            ( InGame { inGameModel | alwaysShowCardNumber = alwaysShowCardNumber }, Cmd.none )
+
+        ( AlwaysShowCardNumber _, _ ) ->
+            ( model, Cmd.none )
+
+        ( PickedAvatar avatar, PickingAvatar { generatedSeed, alwaysShowCardNumber } ) ->
             let
                 ( initialDeck, seed ) =
                     randomDeck generatedSeed
@@ -160,6 +162,7 @@ update msg model =
                         , mainSeed = seed
                         , game = DrawingInitialHand
                         , previousBest = []
+                        , alwaysShowCardNumber = alwaysShowCardNumber
                         }
             in
             ( newModel
@@ -316,6 +319,7 @@ update msg model =
                         , game = DrawingInitialHand
                         , mainSeed = seed
                         , previousBest = playerScore inGameModel.discardPile :: inGameModel.previousBest
+                        , alwaysShowCardNumber = inGameModel.alwaysShowCardNumber
                         }
                     , Cmd.none
                     )
@@ -337,6 +341,7 @@ update msg model =
                                 , mainSeed = seed
                                 , game = DrawingInitialHand
                                 , previousBest = []
+                                , alwaysShowCardNumber = inGameModel.alwaysShowCardNumber
                                 }
                     in
                     ( newModel
@@ -376,9 +381,9 @@ view model =
         gameWidth =
             7.7
 
-        gameHeight : number
+        gameHeight : Float
         gameHeight =
-            4
+            4.2
 
         children : List (Svg Msg)
         children =
@@ -386,7 +391,7 @@ view model =
                 GeneratingSeed ->
                     [ text "Loading..." ]
 
-                PickingAvatar seed ->
+                PickingAvatar pickingModel ->
                     let
                         scale : Float
                         scale =
@@ -397,7 +402,7 @@ view model =
                             6
                     in
                     Types.allCharacters
-                        |> shuffle seed
+                        |> shuffle pickingModel.generatedSeed
                         |> List.Extra.greedyGroupsOf perRow
                         |> List.indexedMap
                             (\y row ->
@@ -461,132 +466,41 @@ view model =
 
                                 GameFinished ->
                                     Nothing
+
+                        specific : List (Svg Msg)
+                        specific =
+                            case inGameModel.game of
+                                DrawingInitialHand ->
+                                    [ bottomButton (GameMsg NextRound) "Start game" ]
+
+                                PreparingHand preparingModel ->
+                                    List.filterMap identity
+                                        [ playHandButton preparingModel ]
+
+                                PlayedHand _ ->
+                                    let
+                                        lastHand : Bool
+                                        lastHand =
+                                            (List.length inGameModel.discardPile
+                                                + handSize
+                                            )
+                                                == List.length inGameModel.initialDeck
+
+                                        label : String
+                                        label =
+                                            if lastHand then
+                                                "Final score"
+
+                                            else
+                                                "Next hand"
+                                    in
+                                    [ bottomButton (GameMsg NextRound) label ]
+
+                                GameFinished ->
+                                    gameFinishedView inGameModel
                     in
                     [ backgroundRect
-                    , g []
-                        (case inGameModel.game of
-                            DrawingInitialHand ->
-                                [ bottomButton (GameMsg NextRound) "Start game" ]
-
-                            PreparingHand preparingModel ->
-                                List.filterMap identity
-                                    [ playHandButton preparingModel
-                                    ]
-
-                            PlayedHand _ ->
-                                let
-                                    lastHand : Bool
-                                    lastHand =
-                                        (List.length inGameModel.discardPile
-                                            + handSize
-                                        )
-                                            == List.length inGameModel.initialDeck
-
-                                    label : String
-                                    label =
-                                        if lastHand then
-                                            "Final score"
-
-                                        else
-                                            "Next hand"
-                                in
-                                [ bottomButton (GameMsg NextRound) label ]
-
-                            GameFinished ->
-                                let
-                                    finalPlayerScore : Float
-                                    finalPlayerScore =
-                                        playerScore inGameModel.discardPile
-                                in
-                                case inGameModel.previousBest of
-                                    [] ->
-                                        [ centeredText
-                                            [ x 3.5
-                                            , y 1.4
-                                            , fill (Paint Color.white)
-                                            ]
-                                            [ tspan
-                                                [ x 3.5
-                                                , TypedSvg.Attributes.InEm.dy 1.2
-                                                ]
-                                                [ text
-                                                    ("Your final score is {final}."
-                                                        |> Format.float "final" finalPlayerScore
-                                                    )
-                                                ]
-                                            , tspan
-                                                [ x 3.5
-                                                , TypedSvg.Attributes.InEm.dy 1.2
-                                                ]
-                                                [ text "That's pretty bad," ]
-                                            , tspan
-                                                [ x 3.5
-                                                , TypedSvg.Attributes.InEm.dy 1.2
-                                                ]
-                                                [ text "think you can do better?" ]
-                                            ]
-                                        , bottomButton (GameMsg NextLoop) "Next loop"
-                                        ]
-
-                                    previousBest :: tail ->
-                                        if previousBest < finalPlayerScore then
-                                            [ [ "Your final score is {final}."
-                                                    |> Format.float "final" finalPlayerScore
-                                              , "That's slightly better,"
-                                              , "think you can do more?"
-                                              ]
-                                                |> textBlock
-                                                    { x = 3.5
-                                                    , y = 1.4
-                                                    , color = Color.white
-                                                    }
-                                            , bottomButton (GameMsg NextLoop) "Next loop"
-                                            ]
-
-                                        else
-                                            [ ([ "Your final score is {final}."
-                                                    |> Format.float "final" finalPlayerScore
-                                               , "That's {compare} than {previousBest}."
-                                                    |> Format.string "compare"
-                                                        (if previousBest == finalPlayerScore then
-                                                            "not better"
-
-                                                         else
-                                                            "worse"
-                                                        )
-                                                    |> Format.float "previousBest" previousBest
-                                               ]
-                                                ++ (case tail of
-                                                        [] ->
-                                                            [ "You failed to improve"
-                                                            , "your score at all."
-                                                            ]
-
-                                                        [ _ ] ->
-                                                            [ "You managed to improve your"
-                                                            , "score only once before failing."
-                                                            ]
-
-                                                        [ _, _ ] ->
-                                                            [ "You managed to improve your"
-                                                            , "score twice before failing."
-                                                            ]
-
-                                                        _ ->
-                                                            [ "You managed to improve your"
-                                                            , "score {len} times before failing."
-                                                                |> Format.int "len" (List.length tail)
-                                                            ]
-                                                   )
-                                              )
-                                                |> textBlock
-                                                    { x = 3.5
-                                                    , y = 1.25
-                                                    , color = Color.white
-                                                    }
-                                            , bottomButton (GameMsg NextGame) "Try again"
-                                            ]
-                        )
+                    , g [] specific
                     , viewAvatar (Types.previous inGameModel.currentAvatar)
                     , g [ transform [ Translate 0 3 ] ] [ viewAvatar inGameModel.currentAvatar ]
                     , g [ transform [ Translate 6.3 0 ] ] (viewPreviousBest inGameModel.previousBest)
@@ -600,6 +514,103 @@ view model =
         , fontSize 0.25
         ]
         children
+
+
+gameFinishedView : InGameModel -> List (Svg Msg)
+gameFinishedView inGameModel =
+    let
+        finalPlayerScore : Float
+        finalPlayerScore =
+            playerScore inGameModel.discardPile
+    in
+    case inGameModel.previousBest of
+        [] ->
+            [ centeredText
+                [ x 3.5
+                , y 1.4
+                , fill (Paint Color.white)
+                ]
+                [ tspan
+                    [ x 3.5
+                    , TypedSvg.Attributes.InEm.dy 1.2
+                    ]
+                    [ text
+                        ("Your final score is {final}."
+                            |> Format.float "final" finalPlayerScore
+                        )
+                    ]
+                , tspan
+                    [ x 3.5
+                    , TypedSvg.Attributes.InEm.dy 1.2
+                    ]
+                    [ text "That's pretty bad," ]
+                , tspan
+                    [ x 3.5
+                    , TypedSvg.Attributes.InEm.dy 1.2
+                    ]
+                    [ text "think you can do better?" ]
+                ]
+            , bottomButton (GameMsg NextLoop) "Next loop"
+            ]
+
+        previousBest :: tail ->
+            if previousBest < finalPlayerScore then
+                [ [ "Your final score is {final}."
+                        |> Format.float "final" finalPlayerScore
+                  , "That's slightly better,"
+                  , "think you can do more?"
+                  ]
+                    |> textBlock
+                        { x = 3.5
+                        , y = 1.4
+                        , color = Color.white
+                        }
+                , bottomButton (GameMsg NextLoop) "Next loop"
+                ]
+
+            else
+                [ ([ "Your final score is {final}."
+                        |> Format.float "final" finalPlayerScore
+                   , "That's {compare} than {previousBest}."
+                        |> Format.string "compare"
+                            (if previousBest == finalPlayerScore then
+                                "not better"
+
+                             else
+                                "worse"
+                            )
+                        |> Format.float "previousBest" previousBest
+                   ]
+                    ++ (case tail of
+                            [] ->
+                                [ "You failed to improve"
+                                , "your score at all."
+                                ]
+
+                            [ _ ] ->
+                                [ "You managed to improve your"
+                                , "score only once before failing."
+                                ]
+
+                            [ _, _ ] ->
+                                [ "You managed to improve your"
+                                , "score twice before failing."
+                                ]
+
+                            _ ->
+                                [ "You managed to improve your"
+                                , "score {len} times before failing."
+                                    |> Format.int "len" (List.length tail)
+                                ]
+                       )
+                  )
+                    |> textBlock
+                        { x = 3.5
+                        , y = 1.25
+                        , color = Color.white
+                        }
+                , bottomButton (GameMsg NextGame) "Try again"
+                ]
 
 
 textBlock : { x : Float, y : Float, color : Color } -> List String -> Svg Msg
@@ -744,6 +755,7 @@ viewPlayerCard inGameModel card =
                                 { x = deckLerp index
                                 , y = 2
                                 , card = card
+                                , alwaysShowCardNumber = inGameModel.alwaysShowCardNumber
                                 , cardState = FaceDown
                                 }
                         )
@@ -758,6 +770,7 @@ viewPlayerCard inGameModel card =
                                 { x = 6 + deckLerp index
                                 , y = 2
                                 , card = card
+                                , alwaysShowCardNumber = inGameModel.alwaysShowCardNumber
                                 , cardState = FaceDown
                                 }
                         )
@@ -783,6 +796,7 @@ viewPlayerCard inGameModel card =
                                                 { x = 1 + toFloat index * (cardWidth + 0.2)
                                                 , y = 2
                                                 , card = card
+                                                , alwaysShowCardNumber = inGameModel.alwaysShowCardNumber
                                                 , cardState = FaceUp
                                                 }
                                         )
@@ -807,6 +821,7 @@ viewPlayerCard inGameModel card =
                                                 { x = 1 + toFloat index * (cardWidth + 0.2)
                                                 , y = 3
                                                 , card = card
+                                                , alwaysShowCardNumber = inGameModel.alwaysShowCardNumber
                                                 , cardState = FaceUp
                                                 }
                                         )
@@ -832,6 +847,7 @@ viewPlayerCard inGameModel card =
                                                     else
                                                         2
                                                 , card = card
+                                                , alwaysShowCardNumber = inGameModel.alwaysShowCardNumber
                                                 , cardState =
                                                     case compare (cardValue p) (cardValue o) of
                                                         LT ->
@@ -909,6 +925,7 @@ viewOpponentCard inGameModel card =
                                 { x = deckLerp index
                                 , y = 1
                                 , card = card
+                                , alwaysShowCardNumber = inGameModel.alwaysShowCardNumber
                                 , cardState = FaceDown
                                 }
                         )
@@ -923,6 +940,7 @@ viewOpponentCard inGameModel card =
                                 { x = 6 + deckLerp index
                                 , y = 1
                                 , card = card
+                                , alwaysShowCardNumber = inGameModel.alwaysShowCardNumber
                                 , cardState = FaceDown
                                 }
                         )
@@ -942,6 +960,7 @@ viewOpponentCard inGameModel card =
                                         { x = 1 + toFloat index * (cardWidth + 0.2)
                                         , y = 0
                                         , card = card
+                                        , alwaysShowCardNumber = inGameModel.alwaysShowCardNumber
                                         , cardState = FaceDown
                                         }
                                 )
@@ -961,6 +980,7 @@ viewOpponentCard inGameModel card =
                                             else
                                                 1
                                         , card = card
+                                        , alwaysShowCardNumber = inGameModel.alwaysShowCardNumber
                                         , cardState =
                                             case compare (cardValue p) (cardValue o) of
                                                 LT ->
@@ -1130,6 +1150,7 @@ viewCard :
         , y : Float
         , cardState : CardState
         , card : Card kind
+        , alwaysShowCardNumber : Bool
         }
     -> Svg msg
 viewCard attrs config =
@@ -1214,7 +1235,7 @@ viewCard attrs config =
                         ]
 
                     FaceDown ->
-                        [ if alwaysShowCardNumber then
+                        [ if config.alwaysShowCardNumber then
                             centeredText
                                 [ x (cardWidth / 2 + margin)
                                 , y (cardHeight / 2 + margin)
