@@ -9,6 +9,7 @@ import Color.Extra exposing (colorFromHex)
 import Color.Oklch as Oklch
 import Format
 import List.Extra
+import List.MyExtra
 import Random
 import Random.List
 import TypedSvg exposing (g, rect, svg, tspan)
@@ -19,17 +20,26 @@ import TypedSvg.Core exposing (Attribute, Svg, text)
 import TypedSvg.Events exposing (onClick)
 import TypedSvg.Extra exposing (centeredText)
 import TypedSvg.Types exposing (Cursor(..), DominantBaseline(..), Paint(..), Transform(..))
-import Types exposing (Card, Character, Flags, Opponent, Player, opponentCard, playerCard)
+import Types exposing (Card, Character, Flags, Opponent, Player, cardValue, opponentCard, playerCard)
 
 
-smol : Bool
-smol =
+smallGame : Bool
+smallGame =
     False
+
+
+alwaysShowCardNumber : Bool
+alwaysShowCardNumber =
+    let
+        _ =
+            Debug.todo
+    in
+    True
 
 
 handSize : number
 handSize =
-    if smol then
+    if smallGame then
         3
 
     else
@@ -38,7 +48,7 @@ handSize =
 
 roundsPerLoop : number
 roundsPerLoop =
-    if smol then
+    if smallGame then
         3
 
     else
@@ -117,7 +127,7 @@ main =
 init : flags -> ( Model, Cmd Msg )
 init _ =
     ( GeneratingSeed
-    , if smol then
+    , if smallGame then
         Random.initialSeed 413
             |> Random.constant
             |> Random.generate GeneratedSeed
@@ -231,7 +241,7 @@ update msg model =
                         { inGameModel
                             | game =
                                 { opponentHand = opponentHand
-                                , playerHand = List.sortBy Types.cardValue playerHand
+                                , playerHand = List.sortBy cardValue playerHand
                                 , playerChoices = []
                                 }
                                     |> PreparingHand
@@ -262,7 +272,7 @@ update msg model =
                                 | discardPile = inGameModel.discardPile ++ playedModel.play
                                 , game =
                                     { opponentHand = opponentHand
-                                    , playerHand = List.sortBy Types.cardValue playerHand
+                                    , playerHand = List.sortBy cardValue playerHand
                                     , playerChoices = []
                                     }
                                         |> PreparingHand
@@ -471,12 +481,16 @@ view model =
                                             + handSize
                                         )
                                             == List.length inGameModel.initialDeck
-                                in
-                                if lastHand then
-                                    [ bottomButton (GameMsg NextRound) "Final score" ]
 
-                                else
-                                    [ bottomButton (GameMsg NextRound) "Next hand" ]
+                                    label : String
+                                    label =
+                                        if lastHand then
+                                            "Final score"
+
+                                        else
+                                            "Next hand"
+                                in
+                                [ bottomButton (GameMsg NextRound) label ]
 
                             GameFinished ->
                                 let
@@ -675,8 +689,7 @@ viewPlayerScore discard play =
 
 viewCards : InGameModel -> List (Svg Msg)
 viewCards inGameModel =
-    inGameModel.initialDeck
-        |> List.reverse
+    sortedDeck
         |> List.concatMap
             (\( playerCard, opponentCard ) ->
                 [ viewPlayerCard inGameModel playerCard
@@ -685,39 +698,71 @@ viewCards inGameModel =
             )
 
 
+sortedDeck : List ( Card Player, Card Opponent )
+sortedDeck =
+    List.range 1 deckSize
+        |> List.map (\c -> ( playerCard c, opponentCard c ))
+
+
 viewPlayerCard : InGameModel -> Card Player -> Svg Msg
 viewPlayerCard inGameModel card =
     let
-        viewIfInDeck : ( () -> Maybe Int, Int -> Svg msg )
+        discardPile : List (Card Player)
+        discardPile =
+            inGameModel.discardPile
+                |> List.map Tuple.first
+                |> List.sortBy cardValue
+
+        hand : List (Card Player)
+        hand =
+            case inGameModel.game of
+                PlayedHand r ->
+                    List.map Tuple.first r.play
+
+                DrawingInitialHand ->
+                    []
+
+                PreparingHand r ->
+                    r.playerHand
+
+                GameFinished ->
+                    []
+
+        viewIfInDeck : () -> Maybe (Svg msg)
         viewIfInDeck =
-            ( \_ -> List.Extra.findIndex (\( c, _ ) -> c == card) inGameModel.initialDeck
-            , \index ->
-                viewCard []
-                    { x = deckLerp index
-                    , y = 2
-                    , card = card
-                    , faceUp = False
-                    }
-            )
+            \_ ->
+                sortedDeck
+                    |> List.map Tuple.first
+                    |> List.Extra.removeWhen
+                        (\deckCard ->
+                            List.member deckCard discardPile || List.member deckCard hand
+                        )
+                    |> List.Extra.elemIndex card
+                    |> Maybe.map
+                        (\index ->
+                            viewCard []
+                                { x = deckLerp index
+                                , y = 2
+                                , card = card
+                                , cardState = FaceDown
+                                }
+                        )
 
-        viewIfInDiscardPile : ( () -> Maybe Int, Int -> Svg msg )
+        viewIfInDiscardPile : () -> Maybe (Svg msg)
         viewIfInDiscardPile =
-            ( \_ ->
-                if List.any (\( c, _ ) -> c == card) inGameModel.discardPile then
-                    List.Extra.findIndex (\( c, _ ) -> c == card) inGameModel.initialDeck
+            \_ ->
+                List.Extra.elemIndex card discardPile
+                    |> Maybe.map
+                        (\index ->
+                            viewCard []
+                                { x = 6 + deckLerp index
+                                , y = 2
+                                , card = card
+                                , cardState = FaceDown
+                                }
+                        )
 
-                else
-                    Nothing
-            , \index ->
-                viewCard []
-                    { x = 6 + deckLerp index
-                    , y = 2
-                    , card = card
-                    , faceUp = False
-                    }
-            )
-
-        specific : List ( () -> Maybe Int, Int -> Svg GameMsg )
+        specific : List (() -> Maybe (Svg GameMsg))
         specific =
             case inGameModel.game of
                 DrawingInitialHand ->
@@ -725,24 +770,26 @@ viewPlayerCard inGameModel card =
 
                 PreparingHand preparingModel ->
                     let
-                        viewIfSelected : ( () -> Maybe Int, Int -> Svg GameMsg )
+                        viewIfSelected : () -> Maybe (Svg GameMsg)
                         viewIfSelected =
-                            ( \_ -> List.Extra.elemIndex card preparingModel.playerChoices
-                            , \index ->
-                                viewCard
-                                    [ onClick (Unplay card)
-                                    , cursor CursorPointer
-                                    ]
-                                    { x = 1 + toFloat index * (cardWidth + 0.2)
-                                    , y = 2
-                                    , card = card
-                                    , faceUp = True
-                                    }
-                            )
+                            \_ ->
+                                List.Extra.elemIndex card preparingModel.playerChoices
+                                    |> Maybe.map
+                                        (\index ->
+                                            viewCard
+                                                [ onClick (Unplay card)
+                                                , cursor CursorPointer
+                                                ]
+                                                { x = 1 + toFloat index * (cardWidth + 0.2)
+                                                , y = 2
+                                                , card = card
+                                                , cardState = FaceUp
+                                                }
+                                        )
 
-                        viewIfInHand : ( () -> Maybe Int, Int -> Svg GameMsg )
+                        viewIfInHand : () -> Maybe (Svg GameMsg)
                         viewIfInHand =
-                            ( \_ ->
+                            \_ ->
                                 let
                                     reducedHand : List (Card Player)
                                     reducedHand =
@@ -751,17 +798,18 @@ viewPlayerCard inGameModel card =
                                             preparingModel.playerHand
                                 in
                                 List.Extra.elemIndex card reducedHand
-                            , \index ->
-                                viewCard
-                                    [ onClick (Play card)
-                                    , cursor CursorPointer
-                                    ]
-                                    { x = 1 + toFloat index * (cardWidth + 0.2)
-                                    , y = 3
-                                    , card = card
-                                    , faceUp = True
-                                    }
-                            )
+                                    |> Maybe.map
+                                        (\index ->
+                                            viewCard
+                                                [ onClick (Play card)
+                                                , cursor CursorPointer
+                                                ]
+                                                { x = 1 + toFloat index * (cardWidth + 0.2)
+                                                , y = 3
+                                                , card = card
+                                                , cardState = FaceUp
+                                                }
+                                        )
                     in
                     [ viewIfSelected
                     , viewIfInHand
@@ -769,17 +817,38 @@ viewPlayerCard inGameModel card =
 
                 PlayedHand playedModel ->
                     let
-                        viewIfInPlay : ( () -> Maybe Int, Int -> Svg msg )
+                        viewIfInPlay : () -> Maybe (Svg msg)
                         viewIfInPlay =
-                            ( \_ -> List.Extra.findIndex (\( c, _ ) -> c == card) playedModel.play
-                            , \index ->
-                                viewCard []
-                                    { x = 1 + toFloat index * (cardWidth + 0.2)
-                                    , y = 2
-                                    , card = card
-                                    , faceUp = True
-                                    }
-                            )
+                            \_ ->
+                                List.MyExtra.findMapWithIndex
+                                    (\index ( p, o ) ->
+                                        if p == card then
+                                            viewCard []
+                                                { x = 1 + toFloat index * (cardWidth + 0.2)
+                                                , y =
+                                                    if cardValue p > cardValue o then
+                                                        1.75
+
+                                                    else
+                                                        2
+                                                , card = card
+                                                , cardState =
+                                                    case compare (cardValue p) (cardValue o) of
+                                                        LT ->
+                                                            Desaturated
+
+                                                        EQ ->
+                                                            FaceUp
+
+                                                        GT ->
+                                                            FaceUp
+                                                }
+                                                |> Just
+
+                                        else
+                                            Nothing
+                                    )
+                                    playedModel.play
                     in
                     [ viewIfInPlay ]
 
@@ -792,87 +861,134 @@ viewPlayerCard inGameModel card =
 
 findFirst :
     List
-        ( () -> Maybe b
-        , b -> Svg msg
-        )
+        (() -> Maybe (Svg msg))
     -> Svg msg
 findFirst list =
     list
-        |> List.Extra.findMap (\( f, g ) -> Maybe.map g (f ()))
+        |> List.Extra.findMap (\f -> f ())
         |> Maybe.withDefault (text "")
 
 
 viewOpponentCard : InGameModel -> Card Opponent -> Svg Msg
 viewOpponentCard inGameModel card =
     let
-        deck : ( () -> Maybe Int, Int -> Svg msg )
-        deck =
-            ( \_ -> List.Extra.findIndex (\( _, c ) -> c == card) inGameModel.initialDeck
-            , \index ->
-                viewCard []
-                    { x = deckLerp index
-                    , y = 1
-                    , card = card
-                    , faceUp = False
-                    }
-            )
-
-        discardPile : ( () -> Maybe Int, Int -> Svg msg )
+        discardPile : List (Card Opponent)
         discardPile =
-            ( \_ ->
-                if List.any (\( _, c ) -> c == card) inGameModel.discardPile then
-                    List.Extra.findIndex (\( _, c ) -> c == card) inGameModel.initialDeck
+            inGameModel.discardPile
+                |> List.map Tuple.second
+                |> List.sortBy cardValue
 
-                else
-                    Nothing
-            , \index ->
-                viewCard []
-                    { x = 6 + deckLerp index
-                    , y = 1
-                    , card = card
-                    , faceUp = False
-                    }
-            )
+        hand : List (Card Opponent)
+        hand =
+            case inGameModel.game of
+                PlayedHand r ->
+                    List.map Tuple.second r.play
 
-        specific : List ( () -> Maybe Int, Int -> Svg msg )
+                DrawingInitialHand ->
+                    []
+
+                PreparingHand r ->
+                    r.opponentHand
+
+                GameFinished ->
+                    []
+
+        viewIfInDeck : () -> Maybe (Svg msg)
+        viewIfInDeck =
+            \_ ->
+                sortedDeck
+                    |> List.map Tuple.second
+                    |> List.Extra.removeWhen
+                        (\deckCard ->
+                            List.member deckCard discardPile || List.member deckCard hand
+                        )
+                    |> List.Extra.elemIndex card
+                    |> Maybe.map
+                        (\index ->
+                            viewCard []
+                                { x = deckLerp index
+                                , y = 1
+                                , card = card
+                                , cardState = FaceDown
+                                }
+                        )
+
+        viewIfInDiscardPile : () -> Maybe (Svg msg)
+        viewIfInDiscardPile =
+            \_ ->
+                List.Extra.elemIndex card discardPile
+                    |> Maybe.map
+                        (\index ->
+                            viewCard []
+                                { x = 6 + deckLerp index
+                                , y = 1
+                                , card = card
+                                , cardState = FaceDown
+                                }
+                        )
+
+        specific : List (() -> Maybe (Svg msg))
         specific =
             case inGameModel.game of
                 DrawingInitialHand ->
                     []
 
                 PreparingHand preparingModel ->
-                    [ ( \_ -> List.Extra.elemIndex card preparingModel.opponentHand
-                      , \i ->
-                            viewCard []
-                                { x = 1 + toFloat i * (cardWidth + 0.2)
-                                , y = 0
-                                , card = card
-                                , faceUp = False
-                                }
-                      )
+                    [ \_ ->
+                        List.Extra.elemIndex card preparingModel.opponentHand
+                            |> Maybe.map
+                                (\index ->
+                                    viewCard []
+                                        { x = 1 + toFloat index * (cardWidth + 0.2)
+                                        , y = 0
+                                        , card = card
+                                        , cardState = FaceDown
+                                        }
+                                )
                     ]
 
                 PlayedHand playedModel ->
-                    [ ( \_ -> List.Extra.findIndex (\( _, c ) -> c == card) playedModel.play
-                      , \i ->
-                            viewCard []
-                                { x = 1 + toFloat i * (cardWidth + 0.2)
-                                , y = 1
-                                , card = card
-                                , faceUp = True
-                                }
-                      )
+                    [ \_ ->
+                        List.MyExtra.findMapWithIndex
+                            (\index ( p, o ) ->
+                                if o == card then
+                                    viewCard []
+                                        { x = 1 + toFloat index * (cardWidth + 0.2)
+                                        , y =
+                                            if cardValue o > cardValue p then
+                                                1.25
+
+                                            else
+                                                1
+                                        , card = card
+                                        , cardState =
+                                            case compare (cardValue p) (cardValue o) of
+                                                LT ->
+                                                    FaceUp
+
+                                                EQ ->
+                                                    FaceUp
+
+                                                GT ->
+                                                    Desaturated
+                                        }
+                                        |> Just
+
+                                else
+                                    Nothing
+                            )
+                            playedModel.play
                     ]
 
                 GameFinished ->
                     []
     in
-    findFirst (specific ++ [ discardPile, deck ])
+    findFirst (specific ++ [ viewIfInDiscardPile, viewIfInDeck ])
 
 
 deckLerp : Int -> Float
 deckLerp index =
-    (toFloat index - 1) / deckSize * (1 - cardWidth) - 0.1
+    (100 - toFloat index) / deckSize * (1 - cardWidth) - 1.1
 
 
 playHandButton : { a | playerChoices : List (Card Player) } -> Maybe (Svg Msg)
@@ -987,7 +1103,7 @@ playerScore : List ( Card Player, Card Opponent ) -> Float
 playerScore pile =
     List.map
         (\( playerCard, opponentCard ) ->
-            case compare (Types.cardValue playerCard) (Types.cardValue opponentCard) of
+            case compare (cardValue playerCard) (cardValue opponentCard) of
                 LT ->
                     0
 
@@ -1001,12 +1117,18 @@ playerScore pile =
         |> List.sum
 
 
+type CardState
+    = FaceDown
+    | FaceUp
+    | Desaturated
+
+
 viewCard :
     List (Attribute msg)
     ->
         { x : Float
         , y : Float
-        , faceUp : Bool
+        , cardState : CardState
         , card : Card kind
         }
     -> Svg msg
@@ -1029,16 +1151,25 @@ viewCard attrs config =
 
                 cardBackground : Color
                 cardBackground =
-                    if config.faceUp then
-                        Oklch.toColor
-                            { alpha = 1
-                            , lightness = 0.85
-                            , chroma = 0.07
-                            , hue = (toFloat (Types.cardValue config.card) - 1) / deckSize
-                            }
+                    case config.cardState of
+                        FaceUp ->
+                            Oklch.toColor
+                                { alpha = 1
+                                , lightness = 0.85
+                                , chroma = 0.07
+                                , hue = (toFloat (cardValue config.card) - 1) / deckSize
+                                }
 
-                    else
-                        Color.darkGreen
+                        Desaturated ->
+                            Oklch.toColor
+                                { alpha = 1
+                                , lightness = 0.85
+                                , chroma = 0.03
+                                , hue = (toFloat (cardValue config.card) - 1) / deckSize
+                                }
+
+                        FaceDown ->
+                            Color.darkGreen
             in
             rect
                 [ x margin
@@ -1062,37 +1193,39 @@ viewCard attrs config =
                 )
             :: attrs
         )
-        (if config.faceUp then
-            [ cardRect
-            , centeredText
-                [ x (cardWidth / 2 + margin)
-                , y (cardHeight / 2 + margin)
-                , fill (Paint Color.black)
-                ]
-                [ text (String.fromInt (Types.cardValue config.card)) ]
-            ]
+        (cardRect
+            :: (case config.cardState of
+                    FaceUp ->
+                        [ centeredText
+                            [ x (cardWidth / 2 + margin)
+                            , y (cardHeight / 2 + margin)
+                            , fill (Paint Color.black)
+                            ]
+                            [ text (String.fromInt (cardValue config.card)) ]
+                        ]
 
-         else
-            [ cardRect
-            , if
-                smol
-                    || (let
-                            _ =
-                                Debug.todo
-                        in
-                        True
-                       )
-              then
-                centeredText
-                    [ x (cardWidth / 2 + margin)
-                    , y (cardHeight / 2 + margin)
-                    , fill (Paint Color.green)
-                    ]
-                    [ text (String.fromInt (Types.cardValue config.card)) ]
+                    Desaturated ->
+                        [ centeredText
+                            [ x (cardWidth / 2 + margin)
+                            , y (cardHeight / 2 + margin)
+                            , fill (Paint (Color.rgb 0.35 0.35 0.35))
+                            ]
+                            [ text (String.fromInt (cardValue config.card)) ]
+                        ]
 
-              else
-                g [] []
-            ]
+                    FaceDown ->
+                        [ if alwaysShowCardNumber then
+                            centeredText
+                                [ x (cardWidth / 2 + margin)
+                                , y (cardHeight / 2 + margin)
+                                , fill (Paint Color.green)
+                                ]
+                                [ text (String.fromInt (cardValue config.card)) ]
+
+                          else
+                            g [] []
+                        ]
+               )
         )
 
 
