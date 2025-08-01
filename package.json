@@ -7,6 +7,7 @@
     },
     "scripts": {
         "start": "elm-watch hot",
-        "publish": "elm-watch make; cp build/main.js dist/build; cp index.html dist"
+        "build": "elm-watch make && cp build/main.js dist/build && cp index.html dist",
+        "publish": "yarn build && butler push dist miniBill/better-again:web"
     }
 }
