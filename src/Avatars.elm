@@ -25,7 +25,7 @@ characterToAvatar :
         }
 characterToAvatar ( color, graphics ) =
     { circleBg = True
-    , clothes = Clothes.GraphicShirt (Types.colorToString color) graphics
+    , clothes = Clothes.GraphicShirt (Types.characterToColor color) graphics
     , skinTone = "#c4c4c4"
     , face = characterToFace color
     , top = characterToTop color

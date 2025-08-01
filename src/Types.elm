@@ -1,4 +1,4 @@
-module Types exposing (Card, Character(..), Flags, Opponent, Player, cardValue, colorToString, giveToOpponent, isOpponentCard, next, opponentCard, playerCard, previous)
+module Types exposing (Card, Character(..), Flags, Opponent, Player, cardValue, characterToColor, giveToOpponent, isOpponentCard, next, opponentCard, playerCard, previous)
 
 import Avataaars.Graphics exposing (Graphics(..))
 
@@ -54,8 +54,8 @@ type Character
     | Feferi
 
 
-colorToString : Character -> String
-colorToString color =
+characterToColor : Character -> String
+characterToColor color =
     case color of
         Aradia ->
             "#a10000"
