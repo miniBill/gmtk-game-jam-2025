@@ -78,14 +78,15 @@ view model =
                         base =
                             Avatars.characterToAvatar focused
                     in
-                    (base.top :: allTops base.top)
-                        |> List.map
+                    ( Nothing, "Current", base )
+                        :: List.map
                             (\top ->
                                 ( Nothing
                                 , Debug.toString top
                                 , { base | top = top }
                                 )
                             )
+                            (allTops base.top)
 
                 Nothing ->
                     allCharacters
@@ -133,8 +134,30 @@ allTops top =
     , topAccessoryFacialHair top
     , topHatColorAccessoryFacialHair top
     , topHairColorAccessoryFacialHair top
+    , List.filterMap
+        (\accessory -> withAccessory accessory top)
+        allAccessories
     ]
         |> List.concat
+
+
+withAccessory : Accessory -> Top -> Maybe Top
+withAccessory accessory top =
+    case top of
+        TopFacialHair _ _ ->
+            Nothing
+
+        TopHatColorAccessory t c _ ->
+            Just <| TopHatColorAccessory t c accessory
+
+        TopAccessoryFacialHair t _ f ->
+            Just <| TopAccessoryFacialHair t accessory f
+
+        TopHatColorAccessoryFacialHair t c _ f ->
+            Just <| TopHatColorAccessoryFacialHair t c accessory f
+
+        TopHairColorAccessoryFacialHair t c _ f ->
+            Just <| TopHairColorAccessoryFacialHair t c accessory f
 
 
 topFacialHair : Top -> List Top
@@ -196,6 +219,18 @@ topHairColorAccessoryFacialHair top =
         , Top.ShortHairTheCaesar
         , Top.ShortHairTheCaesarSidePart
         ]
+
+
+allAccessories : List Accessory
+allAccessories =
+    [ Accessory.Blank
+    , Accessory.Kurt
+    , Accessory.Prescription01
+    , Accessory.Prescription02
+    , Accessory.Round
+    , Accessory.Sunglasses
+    , Accessory.Wayfarers
+    ]
 
 
 topToFacialHair : Top -> FacialHair

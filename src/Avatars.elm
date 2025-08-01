@@ -206,7 +206,7 @@ characterToTop character =
     in
     case character of
         June ->
-            hairColorAccessoryFacialHair Top.ShortHairShaggyMullet
+            Top.TopHairColorAccessoryFacialHair Top.ShortHairShaggyMullet HairColor.black Accessory.Prescription01 FacialHair.Blank
 
         Aradia ->
             hairColorAccessoryFacialHair Top.LongHairCurvy
