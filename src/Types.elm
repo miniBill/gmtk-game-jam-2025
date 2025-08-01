@@ -59,9 +59,9 @@ type Character
     | Jane
     | Dirk
     | Roxy
-      -- | Calliope
-      -- | Caliborn
     | Jake
+    | Calliope
+    | Caliborn
 
 
 allCharacters : List ( Character, Graphics )
@@ -139,12 +139,14 @@ characterToColor color =
         Roxy ->
             "#ff6ff2"
 
-        -- Calliope ->
-        --     "#929292"
-        -- Caliborn ->
-        --     "#323232"
         Jake ->
             "#1f9400"
+
+        Calliope ->
+            "#929292"
+
+        Caliborn ->
+            "#323232"
 
 
 next : ( Character, Graphics ) -> ( Character, Graphics )
@@ -222,10 +224,12 @@ nextCharacter character =
             Jake
 
         Jake ->
-            --     Calliope
-            -- Calliope ->
-            --     Caliborn
-            -- Caliborn ->
+            Calliope
+
+        Calliope ->
+            Caliborn
+
+        Caliborn ->
             June
 
 

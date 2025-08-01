@@ -92,12 +92,14 @@ characterToSkinTone character =
         Roxy ->
             "#ffffff"
 
-        -- Calliope ->
-        --     "#306222"
-        -- Caliborn ->
-        --     "#306222"
         Jake ->
             "#ffffff"
+
+        Calliope ->
+            "#306222"
+
+        Caliborn ->
+            "#306222"
 
 
 characterToFace : Character -> Face
@@ -153,10 +155,12 @@ characterToMouth character =
         Jake ->
             Mouth.Smile
 
-        -- Calliope ->
-        --     Mouth.Twinkle
-        -- Caliborn ->
-        --     Mouth.ScreamOpen
+        Calliope ->
+            Mouth.Twinkle
+
+        Caliborn ->
+            Mouth.ScreamOpen
+
         _ ->
             Mouth.Default
 
@@ -185,10 +189,12 @@ characterToEyebrow character =
         Dirk ->
             Eyebrow.DefaultNatural
 
-        -- Calliope ->
-        --     Eyebrow.SadConcerned
-        -- Caliborn ->
-        --     Eyebrow.Angry
+        Calliope ->
+            Eyebrow.SadConcerned
+
+        Caliborn ->
+            Eyebrow.Angry
+
         _ ->
             Eyebrow.Default
 
@@ -232,8 +238,9 @@ characterToEyes character =
         Roxy ->
             Eyes.Wink
 
-        -- Caliborn ->
-        --     Eyes.Surprised
+        Caliborn ->
+            Eyes.Surprised
+
         _ ->
             Eyes.Default
 
@@ -303,9 +310,11 @@ characterToTop character =
         Roxy ->
             Top.TopHairColorAccessoryFacialHair Top.LongHairFro HairColor.blonde Accessory.Blank FacialHair.Blank
 
-        -- Calliope ->
-        --     Top.TopAccessoryFacialHair Top.NoHair Accessory.Blank FacialHair.Blank
-        -- Caliborn ->
-        --     Top.TopAccessoryFacialHair Top.NoHair Accessory.Blank FacialHair.Blank
         Jake ->
             Top.TopHairColorAccessoryFacialHair Top.ShortHairShortCurly HairColor.black Accessory.Prescription02 FacialHair.Blank
+
+        Calliope ->
+            Top.TopAccessoryFacialHair Top.NoHair Accessory.Blank FacialHair.Blank
+
+        Caliborn ->
+            Top.TopAccessoryFacialHair Top.NoHair Accessory.Blank FacialHair.Blank

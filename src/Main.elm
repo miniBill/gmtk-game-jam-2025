@@ -24,7 +24,7 @@ import Types exposing (Card, Character, Flags, Opponent, Player, opponentCard, p
 
 smol : Bool
 smol =
-    True
+    False
 
 
 handSize : number
@@ -381,20 +381,26 @@ view model =
                         scale : Float
                         scale =
                             0.8
+
+                        perRow : number
+                        perRow =
+                            6
                     in
                     Types.allCharacters
                         |> shuffle seed
-                        |> List.Extra.greedyGroupsOf 5
+                        |> List.Extra.greedyGroupsOf perRow
                         |> List.indexedMap
                             (\y row ->
                                 List.indexedMap
                                     (\x avatar ->
                                         g
                                             [ transform
-                                                [ Translate
-                                                    (toFloat x * scale + (gameWidth - 5 * scale) / 2)
-                                                    (toFloat y * scale + scale)
-                                                , Scale scale scale
+                                                [ Scale scale scale
+                                                , Translate
+                                                    (toFloat (x + (perRow - List.length row) // 2)
+                                                        + ((gameWidth / scale - perRow) / 2)
+                                                    )
+                                                    (toFloat y + 1)
                                                 ]
                                             , onClick (PickedAvatar avatar)
                                             ]
