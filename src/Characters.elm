@@ -44,21 +44,6 @@ type alias Msg =
     Model
 
 
-allCharacters : List ( Character, Graphics )
-allCharacters =
-    let
-        go : ( Character, Graphics ) -> List ( Character, Graphics ) -> List ( Character, Graphics )
-        go curr acc =
-            case Types.next curr of
-                ( June, _ ) ->
-                    List.reverse (curr :: acc)
-
-                next ->
-                    go next (curr :: acc)
-    in
-    go ( June, Bat ) []
-
-
 main : Program () Model Msg
 main =
     Browser.sandbox
@@ -85,7 +70,7 @@ view model =
                     allVariants selected
 
                 Nothing ->
-                    allCharacters
+                    Types.allCharacters
                         |> List.map
                             (\( character, graphics ) ->
                                 let

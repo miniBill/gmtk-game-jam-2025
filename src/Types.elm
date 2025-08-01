@@ -1,4 +1,4 @@
-module Types exposing (Card, Character(..), Flags, Opponent, Player, cardValue, characterToColor, giveToOpponent, isOpponentCard, next, opponentCard, playerCard, previous)
+module Types exposing (Card, Character(..), Flags, Opponent, Player, allCharacters, cardValue, characterToColor, giveToOpponent, isOpponentCard, next, opponentCard, playerCard, previous)
 
 import Avataaars.Graphics exposing (Graphics(..))
 
@@ -59,9 +59,24 @@ type Character
     | Jane
     | Dirk
     | Roxy
+      -- | Calliope
+      -- | Caliborn
     | Jake
-    | Calliope
-    | Caliborn
+
+
+allCharacters : List ( Character, Graphics )
+allCharacters =
+    let
+        go : ( Character, Graphics ) -> List ( Character, Graphics ) -> List ( Character, Graphics )
+        go curr acc =
+            case next curr of
+                ( June, _ ) ->
+                    List.reverse (curr :: acc)
+
+                n ->
+                    go n (curr :: acc)
+    in
+    go ( June, Bat ) []
 
 
 characterToColor : Character -> String
@@ -124,14 +139,12 @@ characterToColor color =
         Roxy ->
             "#ff6ff2"
 
+        -- Calliope ->
+        --     "#929292"
+        -- Caliborn ->
+        --     "#323232"
         Jake ->
             "#1f9400"
-
-        Calliope ->
-            "#929292"
-
-        Caliborn ->
-            "#323232"
 
 
 next : ( Character, Graphics ) -> ( Character, Graphics )
@@ -209,12 +222,10 @@ nextCharacter character =
             Jake
 
         Jake ->
-            Calliope
-
-        Calliope ->
-            Caliborn
-
-        Caliborn ->
+            --     Calliope
+            -- Calliope ->
+            --     Caliborn
+            -- Caliborn ->
             June
 
 
