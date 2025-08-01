@@ -119,6 +119,9 @@ characterToMouth character =
         Rose ->
             Mouth.Twinkle
 
+        Dave ->
+            Mouth.Twinkle
+
         Aradia ->
             Mouth.Smile
 
@@ -181,6 +184,9 @@ characterToEyes character =
         Rose ->
             Eyes.Side
 
+        Dave ->
+            Eyes.Wink
+
         Aradia ->
             Eyes.Dizzy
 
@@ -221,7 +227,13 @@ characterToTop character =
             Top.TopHairColorAccessoryFacialHair Top.ShortHairShaggyMullet HairColor.black Accessory.Prescription01 FacialHair.Blank
 
         Rose ->
-            Top.TopHairColorAccessoryFacialHair Top.LongHairFroBand HairColor.silverGray Accessory.Blank FacialHair.Blank
+            Top.TopHairColorAccessoryFacialHair Top.LongHairFroBand HairColor.blondeGolden Accessory.Blank FacialHair.Blank
+
+        Dave ->
+            Top.TopHairColorAccessoryFacialHair Top.ShortHairShortFlat HairColor.blondeGolden Accessory.Wayfarers FacialHair.Blank
+
+        Jade ->
+            Top.TopHairColorAccessoryFacialHair Top.LongHairStraight2 HairColor.black Accessory.Round FacialHair.Blank
 
         Aradia ->
             hairColorAccessoryFacialHair Top.LongHairCurvy
