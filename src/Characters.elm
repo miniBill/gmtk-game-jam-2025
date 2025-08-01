@@ -15,10 +15,9 @@ import Avataaars.SkinTone exposing (SkinTone)
 import Avataaars.Top as Top exposing (Top(..))
 import Avatars
 import Browser
-import Color
 import List.Extra
 import TypedSvg exposing (g, svg, tspan)
-import TypedSvg.Attributes exposing (cursor, fill, transform, viewBox)
+import TypedSvg.Attributes exposing (cursor, transform, viewBox)
 import TypedSvg.Attributes.InEm
 import TypedSvg.Attributes.InPx exposing (fontSize, x, y)
 import TypedSvg.Core exposing (Svg, text)
@@ -239,7 +238,6 @@ textBlock attrs lines =
         |> centeredText
             [ x attrs.x
             , y attrs.y
-            , fill (Paint Color.white)
             ]
 
 

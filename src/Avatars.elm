@@ -96,10 +96,10 @@ characterToSkinTone character =
             "#ffffff"
 
         Calliope ->
-            "#0b4100"
+            "#306222"
 
         Caliborn ->
-            "#0b4100"
+            "#306222"
 
 
 characterToFace : Character -> Face
@@ -146,8 +146,20 @@ characterToMouth character =
         Gamzee ->
             Mouth.Tongue
 
+        Dirk ->
+            Mouth.Serious
+
+        Roxy ->
+            Mouth.Twinkle
+
+        Jake ->
+            Mouth.Smile
+
+        Calliope ->
+            Mouth.Twinkle
+
         Caliborn ->
-            Mouth.Tongue
+            Mouth.ScreamOpen
 
         _ ->
             Mouth.Default
@@ -170,6 +182,18 @@ characterToEyebrow character =
 
         Eridan ->
             Eyebrow.UpDown
+
+        Roxy ->
+            Eyebrow.UpDown
+
+        Dirk ->
+            Eyebrow.DefaultNatural
+
+        Calliope ->
+            Eyebrow.SadConcerned
+
+        Caliborn ->
+            Eyebrow.Angry
 
         _ ->
             Eyebrow.Default
@@ -211,6 +235,12 @@ characterToEyes character =
         Eridan ->
             Eyes.Squint
 
+        Roxy ->
+            Eyes.Wink
+
+        Caliborn ->
+            Eyes.Surprised
+
         _ ->
             Eyes.Default
 
@@ -233,7 +263,7 @@ characterToTop character =
             Top.TopHairColorAccessoryFacialHair Top.ShortHairShortFlat HairColor.blondeGolden Accessory.Wayfarers FacialHair.Blank
 
         Jade ->
-            Top.TopHairColorAccessoryFacialHair Top.LongHairStraight2 HairColor.black Accessory.Round FacialHair.Blank
+            Top.TopHairColorAccessoryFacialHair Top.LongHairCurvy HairColor.black Accessory.Round FacialHair.Blank
 
         Aradia ->
             hairColorAccessoryFacialHair Top.LongHairCurvy
@@ -271,5 +301,20 @@ characterToTop character =
         Feferi ->
             Top.TopHairColorAccessoryFacialHair Top.LongHairBigHair HairColor.black Accessory.Kurt FacialHair.Blank
 
-        _ ->
-            Top.TopHairColorAccessoryFacialHair Top.LongHairBigHair HairColor.black Accessory.Blank FacialHair.Blank
+        Jane ->
+            Top.TopHairColorAccessoryFacialHair Top.ShortHairShaggyMullet HairColor.black Accessory.Prescription01 FacialHair.Blank
+
+        Dirk ->
+            Top.TopHairColorAccessoryFacialHair Top.ShortHairShortWaved HairColor.blondeGolden Accessory.Wayfarers FacialHair.Blank
+
+        Roxy ->
+            Top.TopHairColorAccessoryFacialHair Top.LongHairFro HairColor.blonde Accessory.Blank FacialHair.Blank
+
+        Jake ->
+            Top.TopHairColorAccessoryFacialHair Top.ShortHairShortCurly HairColor.black Accessory.Prescription02 FacialHair.Blank
+
+        Calliope ->
+            Top.TopAccessoryFacialHair Top.NoHair Accessory.Blank FacialHair.Blank
+
+        Caliborn ->
+            Top.TopAccessoryFacialHair Top.NoHair Accessory.Blank FacialHair.Blank
