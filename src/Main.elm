@@ -74,7 +74,7 @@ type alias InGameModel =
 
 type Model
     = GeneratingSeed
-    | PickingAvatar { generatedSeed : Random.Seed, alwaysShowCardNumber : Bool }
+    | PickingAvatar { generatedSeed : Random.Seed, easyMode : Bool }
     | InGame InGameModel
 
 
@@ -134,21 +134,21 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case ( msg, model ) of
         ( GeneratedSeed generatedSeed, GeneratingSeed ) ->
-            ( PickingAvatar { generatedSeed = generatedSeed, alwaysShowCardNumber = False }, Cmd.none )
+            ( PickingAvatar { generatedSeed = generatedSeed, easyMode = False }, Cmd.none )
 
         ( GeneratedSeed _, _ ) ->
             ( model, Cmd.none )
 
-        ( EasyMode alwaysShowCardNumber, PickingAvatar pickingModel ) ->
-            ( PickingAvatar { pickingModel | alwaysShowCardNumber = alwaysShowCardNumber }, Cmd.none )
+        ( EasyMode easyMode, PickingAvatar pickingModel ) ->
+            ( PickingAvatar { pickingModel | easyMode = easyMode }, Cmd.none )
 
-        ( EasyMode alwaysShowCardNumber, InGame inGameModel ) ->
-            ( InGame { inGameModel | easyMode = alwaysShowCardNumber }, Cmd.none )
+        ( EasyMode easyMode, InGame inGameModel ) ->
+            ( InGame { inGameModel | easyMode = easyMode }, Cmd.none )
 
         ( EasyMode _, _ ) ->
             ( model, Cmd.none )
 
-        ( PickedAvatar avatar, PickingAvatar { generatedSeed, alwaysShowCardNumber } ) ->
+        ( PickedAvatar avatar, PickingAvatar { generatedSeed, easyMode } ) ->
             let
                 ( initialDeck, seed ) =
                     randomDeck generatedSeed
@@ -162,7 +162,7 @@ update msg model =
                         , mainSeed = seed
                         , game = DrawingInitialHand
                         , previousBest = []
-                        , easyMode = alwaysShowCardNumber
+                        , easyMode = easyMode
                         }
             in
             ( newModel
@@ -415,7 +415,7 @@ view model =
                                                     (toFloat (x + (perRow - List.length row) // 2)
                                                         + ((gameWidth / scale - perRow) / 2)
                                                     )
-                                                    (toFloat y + 1)
+                                                    (toFloat y + 0.75)
                                                 ]
                                             , onClick (PickedAvatar avatar)
                                             , cursor CursorPointer
@@ -437,6 +437,21 @@ view model =
                                 , fill (Paint Color.white)
                                 ]
                                 [ text "Pick your avatar" ]
+                            )
+                        |> (::)
+                            (centeredText
+                                [ x (gameWidth / 2)
+                                , y 4.15
+                                , fill (Paint Color.white)
+                                , onClick (EasyMode (not pickingModel.easyMode))
+                                , cursor CursorPointer
+                                ]
+                                [ if pickingModel.easyMode then
+                                    text "✅ Easy mode"
+
+                                  else
+                                    text "⬜ Easy mode"
+                                ]
                             )
 
                 InGame inGameModel ->
