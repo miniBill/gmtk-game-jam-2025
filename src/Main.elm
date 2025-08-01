@@ -525,7 +525,6 @@ view model =
         [ viewBox -border -border (gameWidth + border * 2) (gameHeight + border * 2)
         , strokeWidth 0.05
         , fontSize 0.25
-        , style "transform: perspective(1)"
         ]
         children
 
