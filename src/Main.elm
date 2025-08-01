@@ -682,7 +682,7 @@ viewPlayerScore discard play =
                     text before
 
                 else
-                    text (before ++ " => " ++ after)
+                    text (before ++ " ⇒ " ++ after)
         ]
     ]
 
