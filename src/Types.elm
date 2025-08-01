@@ -1,4 +1,4 @@
-module Types exposing (Card, Character(..), Flags, Opponent, Player, cardValue, characterToColor, giveToOpponent, isOpponentCard, next, nextCharacter, opponentCard, playerCard, previous)
+module Types exposing (Card, Character(..), Flags, Opponent, Player, cardValue, characterToColor, giveToOpponent, isOpponentCard, next, opponentCard, playerCard, previous)
 
 import Avataaars.Graphics exposing (Graphics(..))
 
