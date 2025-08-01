@@ -1195,7 +1195,7 @@ viewCard attrs config =
                             Oklch.toColor
                                 { alpha = 1
                                 , lightness = 0.85
-                                , chroma = 0.07
+                                , chroma = 0.1
                                 , hue = (toFloat (cardValue config.card) - 1) / deckSize
                                 }
 
@@ -1203,7 +1203,7 @@ viewCard attrs config =
                             Oklch.toColor
                                 { alpha = 1
                                 , lightness = 0.85
-                                , chroma = 0.03
+                                , chroma = 0.01
                                 , hue = (toFloat (cardValue config.card) - 1) / deckSize
                                 }
 
