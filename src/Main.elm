@@ -403,6 +403,7 @@ view model =
                                                     (toFloat y + 1)
                                                 ]
                                             , onClick (PickedAvatar avatar)
+                                            , cursor CursorPointer
                                             ]
                                             [ Avatars.characterToAvatar avatar
                                                 |> Avataaars.view
