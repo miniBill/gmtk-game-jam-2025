@@ -52,20 +52,23 @@ main =
 
 view : Model -> Svg Msg
 view model =
-    (case model of
-        Just focused ->
-            let
-                base : { circleBg : Bool, clothes : Clothes, skinTone : SkinTone, face : Face, top : Top }
-                base =
-                    Avatars.characterToAvatar focused
-            in
-            (base.top :: allTops)
-                |> List.map (\top -> ( Nothing, { base | top = top } ))
+    let
+        list =
+            case model of
+                Just focused ->
+                    let
+                        base : { circleBg : Bool, clothes : Clothes, skinTone : SkinTone, face : Face, top : Top }
+                        base =
+                            Avatars.characterToAvatar focused
+                    in
+                    (base.top :: allTops)
+                        |> List.map (\top -> ( Nothing, { base | top = top } ))
 
-        Nothing ->
-            allCharacters
-                |> List.map (\c -> ( Just c, Avatars.characterToAvatar c ))
-    )
+                Nothing ->
+                    allCharacters
+                        |> List.map (\c -> ( Just c, Avatars.characterToAvatar c ))
+    in
+    list
         |> List.indexedMap
             (\i ( msg, config ) ->
                 g
@@ -85,7 +88,7 @@ view model =
                     ]
             )
         |> svg
-            [ viewBox -0.5 -0.5 5 8
+            [ viewBox -0.5 -0.5 5 ((List.length list + 3) // 4 + 1 |> toFloat)
             ]
 
 
