@@ -23,7 +23,7 @@ import TypedSvg.Attributes.InPx exposing (fontSize, x, y)
 import TypedSvg.Core exposing (Svg, text)
 import TypedSvg.Events exposing (onClick)
 import TypedSvg.Extra exposing (centeredText)
-import TypedSvg.Types exposing (Cursor(..), Paint(..), Transform(..))
+import TypedSvg.Types exposing (Cursor(..), Transform(..))
 import Types exposing (Character(..))
 
 
