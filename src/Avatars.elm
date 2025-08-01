@@ -113,6 +113,9 @@ characterToFace character =
 characterToMouth : Character -> Mouth
 characterToMouth character =
     case character of
+        June ->
+            Mouth.Smile
+
         Aradia ->
             Mouth.Smile
 
@@ -169,6 +172,9 @@ characterToEyebrow character =
 characterToEyes : Character -> Eyes
 characterToEyes character =
     case character of
+        June ->
+            Eyes.WinkWacky
+
         Aradia ->
             Eyes.Dizzy
 

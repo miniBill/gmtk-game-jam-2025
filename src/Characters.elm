@@ -3,15 +3,19 @@ module Characters exposing (main)
 import Avataaars
 import Avataaars.Accessory as Accessory exposing (Accessory)
 import Avataaars.Clothes exposing (Clothes)
+import Avataaars.Eyebrow as Eyebrow exposing (Eyebrow)
+import Avataaars.Eyes as Eyes exposing (Eyes)
 import Avataaars.Face exposing (Face)
 import Avataaars.FacialHair as FacialHair exposing (FacialHair)
 import Avataaars.Graphics exposing (Graphics(..))
 import Avataaars.HairColor as HairColor exposing (HairColor)
 import Avataaars.HatColor as HatColor exposing (HatColor)
+import Avataaars.Mouth as Mouth exposing (Mouth)
 import Avataaars.SkinTone exposing (SkinTone)
 import Avataaars.Top as Top exposing (Top(..))
 import Avatars
 import Browser
+import List.Extra
 import TypedSvg exposing (g, svg, title)
 import TypedSvg.Attributes exposing (cursor, transform, viewBox)
 import TypedSvg.Core exposing (Svg, text)
@@ -59,38 +63,95 @@ view model =
         scale =
             100
 
-        perRow : number
+        perRow : Int
         perRow =
-            8
+            list
+                |> List.map List.length
+                |> List.maximum
+                |> Maybe.withDefault 1
 
         list :
             List
-                ( Maybe ( Character, Graphics )
-                , String
-                , { circleBg : Bool
-                  , clothes : Clothes
-                  , skinTone : SkinTone
-                  , face : Face
-                  , top : Top
-                  }
+                (List
+                    ( Maybe ( Character, Graphics )
+                    , String
+                    , { circleBg : Bool
+                      , clothes : Clothes
+                      , skinTone : SkinTone
+                      , face : Face
+                      , top : Top
+                      }
+                    )
                 )
         list =
             case model of
                 Just focused ->
                     let
-                        base : { circleBg : Bool, clothes : Clothes, skinTone : SkinTone, face : Face, top : Top }
-                        base =
+                        ({ face } as base) =
                             Avatars.characterToAvatar focused
-                    in
-                    ( Nothing, "Current", base )
-                        :: List.map
-                            (\top ->
-                                ( Nothing
-                                , Debug.toString top
-                                , { base | top = top }
+
+                        withTops :
+                            List
+                                (List
+                                    ( Maybe ( Character, Graphics )
+                                    , String
+                                    , { circleBg : Bool
+                                      , clothes : Clothes
+                                      , skinTone : SkinTone
+                                      , face : Face
+                                      , top : Top
+                                      }
+                                    )
                                 )
-                            )
-                            (allTops base.top)
+                        withTops =
+                            List.map
+                                (\top ->
+                                    ( Nothing
+                                    , Debug.toString top
+                                    , { base | top = top }
+                                    )
+                                )
+                                (allTops base.top)
+                                |> makeGroups 3
+                    in
+                    [ ( Nothing, "Current", base ) ]
+                        :: withTops
+                        ++ [ List.map
+                                (\top ->
+                                    ( Nothing
+                                    , Debug.toString top
+                                    , { base | top = top }
+                                    )
+                                )
+                                (List.filterMap
+                                    (\accessory -> withAccessory accessory base.top)
+                                    allAccessories
+                                )
+                           , List.map
+                                (\eyebrow ->
+                                    ( Nothing
+                                    , Debug.toString eyebrow
+                                    , { base | face = { face | eyebrow = eyebrow } }
+                                    )
+                                )
+                                allEyebrows
+                           , List.map
+                                (\eyes ->
+                                    ( Nothing
+                                    , Debug.toString eyes
+                                    , { base | face = { face | eyes = eyes } }
+                                    )
+                                )
+                                allEyes
+                           , List.map
+                                (\mouth ->
+                                    ( Nothing
+                                    , Debug.toString mouth
+                                    , { base | face = { face | mouth = mouth } }
+                                    )
+                                )
+                                allMouths
+                           ]
 
                 Nothing ->
                     allCharacters
@@ -101,34 +162,98 @@ view model =
                                 , Avatars.characterToAvatar c
                                 )
                             )
+                        |> List.Extra.greedyGroupsOf 4
     in
     list
         |> List.indexedMap
-            (\i ( msg, label, config ) ->
-                g
-                    [ transform
-                        [ Translate
-                            (modBy perRow i |> toFloat |> (*) scale)
-                            ((i // perRow) |> toFloat |> (*) scale)
-                        ]
-                    , onClick msg
-                    , cursor CursorPointer
-                    ]
-                    [ Avataaars.view
-                        { width = scale
-                        , height = scale
-                        }
-                        config
-                    , title [] [ text label ]
-                    ]
+            (\cy ->
+                List.indexedMap
+                    (\cx ( msg, label, config ) ->
+                        g
+                            [ transform
+                                [ Translate
+                                    (cx |> toFloat |> (*) scale)
+                                    (cy |> toFloat |> (*) scale)
+                                ]
+                            , onClick msg
+                            , cursor CursorPointer
+                            ]
+                            [ Avataaars.view
+                                { width = scale
+                                , height = scale
+                                }
+                                config
+                            , title [] [ text label ]
+                            ]
+                    )
             )
+        |> List.concat
         |> svg
             [ viewBox
                 (-scale / 10)
                 (-scale / 10)
-                (perRow * scale + 0.2 * scale)
-                (0.2 * scale + scale * toFloat ((List.length list + 3) // perRow))
+                (0.2 * scale + scale * toFloat perRow)
+                (0.2 * scale + scale * toFloat (List.length list))
             ]
+
+
+makeGroups : Int -> List a -> List (List a)
+makeGroups count list =
+    let
+        len : Int
+        len =
+            List.length list
+
+        groupSize : Int
+        groupSize =
+            (len + count - 1) // count
+    in
+    List.Extra.greedyGroupsOf groupSize list
+
+
+allEyebrows : List Eyebrow
+allEyebrows =
+    [ Eyebrow.Angry
+    , Eyebrow.Default
+    , Eyebrow.FlatNatural
+    , Eyebrow.RaisedExcited
+    , Eyebrow.SadConcerned
+    , Eyebrow.UnibrowNatural
+    , Eyebrow.UpDown
+    ]
+
+
+allMouths : List Mouth
+allMouths =
+    [ Mouth.Concerned
+    , Mouth.Default
+    , Mouth.Disbelief
+    , Mouth.Eating
+    , Mouth.Grimace
+    , Mouth.Sad
+    , Mouth.ScreamOpen
+    , Mouth.Serious
+    , Mouth.Smile
+    , Mouth.Tongue
+    , Mouth.Twinkle
+    ]
+
+
+allEyes : List Eyes
+allEyes =
+    [ Eyes.Close
+    , Eyes.Cry
+    , Eyes.Default
+    , Eyes.Dizzy
+    , Eyes.EyeRoll
+    , Eyes.Happy
+    , Eyes.Hearts
+    , Eyes.Side
+    , Eyes.Squint
+    , Eyes.Surprised
+    , Eyes.Wink
+    , Eyes.WinkWacky
+    ]
 
 
 allTops : Top -> List Top
@@ -138,9 +263,6 @@ allTops top =
     , topAccessoryFacialHair top
     , topHatColorAccessoryFacialHair top
     , topHairColorAccessoryFacialHair top
-    , List.filterMap
-        (\accessory -> withAccessory accessory top)
-        allAccessories
     ]
         |> List.concat
 
