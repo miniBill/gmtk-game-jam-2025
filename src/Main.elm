@@ -13,14 +13,16 @@ import List.Extra
 import List.NonEmpty as NonEmpty exposing (NonEmpty)
 import Random
 import Random.List
-import TypedSvg exposing (g, rect, svg, tspan)
-import TypedSvg.Attributes exposing (class, cursor, dominantBaseline, fill, id, stroke, style, transform, viewBox)
+import TypedSvg exposing (defs, filter, g, image, rect, svg, tspan)
+import TypedSvg.Attributes as Attributes exposing (class, cursor, dominantBaseline, fill, href, id, stroke, style, transform, viewBox)
 import TypedSvg.Attributes.InEm
 import TypedSvg.Attributes.InPx exposing (fontSize, height, rx, strokeWidth, width, x, y)
-import TypedSvg.Core exposing (Attribute, Svg, text)
+import TypedSvg.Core exposing (Attribute, Svg, attribute, text)
 import TypedSvg.Events exposing (onClick)
 import TypedSvg.Extra exposing (centeredText)
-import TypedSvg.Types exposing (Cursor(..), DominantBaseline(..), Paint(..), Transform(..))
+import TypedSvg.Filters exposing (colorMatrix)
+import TypedSvg.Filters.Attributes exposing (colorMatrixType, colorMatrixValues, in_)
+import TypedSvg.Types exposing (ClipPath(..), ColorMatrixType(..), Cursor(..), DominantBaseline(..), Filter(..), InValue(..), Paint(..), Transform(..))
 import Types exposing (Card(..), Character, Flags, Opponent, Player, Suit(..))
 
 
@@ -36,7 +38,7 @@ handCount =
 
 deck : List (Card kind)
 deck =
-    List.Extra.lift2 Card allSuits (List.range 6 14)
+    List.Extra.lift2 Card allSuits (List.range 7 14)
 
 
 allSuits : List Suit
@@ -319,7 +321,7 @@ view model =
 
         gameWidth : Float
         gameWidth =
-            7.3
+            7.4
 
         gameHeight : Float
         gameHeight =
@@ -341,7 +343,7 @@ view model =
                         perRow =
                             6
                     in
-                    rect
+                    [ rect
                         [ x -border
                         , y -border
                         , width (gameWidth + border * 2)
@@ -349,44 +351,43 @@ view model =
                         , fill (Paint (colorFromHex "#234000"))
                         ]
                         []
-                        :: (Types.allCharacters
-                                |> shuffle generatedSeed
-                                |> List.Extra.greedyGroupsOf perRow
-                                |> List.indexedMap
-                                    (\y row ->
-                                        List.indexedMap
-                                            (\x avatar ->
-                                                g
-                                                    [ transform
-                                                        [ Scale scale scale
-                                                        , Translate
-                                                            (toFloat (x + (perRow - List.length row) // 2)
-                                                                + ((gameWidth / scale - perRow) / 2)
-                                                            )
-                                                            (toFloat y + 0.75)
-                                                        ]
-                                                    , onClick (PickedAvatar avatar)
-                                                    , cursor CursorPointer
-                                                    ]
-                                                    [ Avatars.characterToAvatar avatar
-                                                        |> Avataaars.view
-                                                            { width = 1
-                                                            , height = 1
-                                                            }
-                                                    ]
-                                            )
-                                            row
+                    , Types.allCharacters
+                        |> shuffle generatedSeed
+                        |> List.Extra.greedyGroupsOf perRow
+                        |> List.indexedMap
+                            (\y row ->
+                                List.indexedMap
+                                    (\x avatar ->
+                                        g
+                                            [ transform
+                                                [ Scale scale scale
+                                                , Translate
+                                                    (toFloat (x + (perRow - List.length row) // 2)
+                                                        + ((gameWidth / scale - perRow) / 2)
+                                                    )
+                                                    (toFloat y + 0.75)
+                                                ]
+                                            , onClick (PickedAvatar avatar)
+                                            , cursor CursorPointer
+                                            ]
+                                            [ Avatars.characterToAvatar avatar
+                                                |> Avataaars.view
+                                                    { width = 1
+                                                    , height = 1
+                                                    }
+                                            ]
                                     )
-                                |> List.concat
-                                |> (::)
-                                    (centeredText
-                                        [ x (gameWidth / 2)
-                                        , y (scale / 2)
-                                        , fill (Paint Color.white)
-                                        ]
-                                        [ text "Pick your avatar" ]
-                                    )
-                           )
+                                    row
+                            )
+                        |> List.concat
+                        |> g []
+                    , centeredText
+                        [ x (gameWidth / 2)
+                        , y (scale / 2)
+                        , fill (Paint Color.white)
+                        ]
+                        [ text "Pick your avatar" ]
+                    ]
 
                 InGame inGameModel ->
                     let
@@ -440,21 +441,57 @@ view model =
                                 GameFinished ->
                                     gameFinishedView inGameModel
                     in
-                    [ backgroundRect
-                    , g [] specific
-                    , viewAvatar (Types.previous inGameModel.currentAvatar)
-                    , g [ transform [ Translate 0 3 ] ] [ viewAvatar inGameModel.currentAvatar ]
-                    , g [ transform [ Translate 6.3 1 ] ] (viewPreviousBest inGameModel.previousGames)
-                    , g [ transform [ Translate 6.3 2 ] ] (viewPlayerScore inGameModel.playedHands currentPlay)
+                    [ defs []
+                        [ TypedSvg.clipPath [ id "card-clip" ]
+                            [ rect
+                                [ y cardClipping.top
+                                , x cardClipping.left
+                                , width (cardWidth - cardClipping.width)
+                                , height (cardHeight - cardClipping.height)
+                                , rx cardClipping.rx
+                                ]
+                                []
+                            ]
+                        , filter [ id "desaturate" ]
+                            [ colorMatrix
+                                [ in_ InSourceGraphic
+                                , colorMatrixType ColorMatrixTypeMatrix
+                                , [ "0.2 0.2 0.2 0 0.1"
+                                  , "0.2 0.2 0.2 0 0.1"
+                                  , "0.2 0.2 0.2 0 0.1"
+                                  , "0 0 0 1 0"
+                                  ]
+                                    |> String.join " "
+                                    |> colorMatrixValues
+                                ]
+                                []
+                            ]
+                        ]
+                    , backgroundRect
+                    , g [ id "per-state" ] specific
+                    , g [ id "opponent-avatar" ] [ viewAvatar (Types.previous inGameModel.currentAvatar) ]
+                    , g [ id "avatar", transform [ Translate 0 3 ] ] [ viewAvatar inGameModel.currentAvatar ]
+                    , g [ id "previous-best", transform [ Translate 6.3 1 ] ] (viewPreviousBest inGameModel.previousGames)
+                    , g [ id "score", transform [ Translate 6.3 2 ] ] (viewPlayerScore inGameModel.playedHands currentPlay)
                     , g [ id "cards" ] (viewCards inGameModel)
                     ]
     in
     svg
-        [ viewBox -border -border (gameWidth + border * 2) (gameHeight + border * 2)
-        , strokeWidth 0.05
+        [ strokeWidth 0.05
         , fontSize 0.25
+        , viewBox -border -border (gameWidth + border * 2) (gameHeight + border * 2)
         ]
         children
+
+
+cardClipping : { left : Float, top : Float, width : Float, height : Float, rx : Float }
+cardClipping =
+    { left = 0.063
+    , top = 0.036
+    , width = 0.125
+    , height = 0.075
+    , rx = 0.05
+    }
 
 
 gameFinishedView : InGameModel -> List (Svg Msg)
@@ -489,7 +526,7 @@ gameFinishedView inGameModel =
                     [ x 3.5
                     , TypedSvg.Attributes.InEm.dy 1.2
                     ]
-                    [ text "think you can beat yourself?" ]
+                    [ text "think you can beat that?" ]
                 ]
             , leftButton (GameMsg NextLoop) "Next loop"
             ]
@@ -579,30 +616,30 @@ textBlock attrs lines =
 
 viewPreviousBest : List Game -> List (Svg msg)
 viewPreviousBest previousGames =
-    if List.isEmpty previousGames then
-        []
+    case List.head previousGames of
+        Nothing ->
+            []
 
-    else
-        [ centeredText
-            [ x 0.5
-            , y 0.45
-            , fill (Paint Color.white)
-            , dominantBaseline DominantBaselineAuto
+        Just lastGame ->
+            [ centeredText
+                [ x 0.5
+                , y 0.45
+                , fill (Paint Color.white)
+                , dominantBaseline DominantBaselineAuto
+                ]
+                [ text "Previous" ]
+            , centeredText
+                [ x 0.5
+                , y 0.55
+                , fill (Paint Color.white)
+                , dominantBaseline DominantBaselineHanging
+                ]
+                [ lastGame
+                    |> playerGameScore
+                    |> String.fromFloat
+                    |> text
+                ]
             ]
-            [ text "Previous" ]
-        , centeredText
-            [ x 0.5
-            , y 0.55
-            , fill (Paint Color.white)
-            , dominantBaseline DominantBaselineHanging
-            ]
-            [ previousGames
-                |> List.reverse
-                |> List.map (\game -> game |> playerGameScore |> String.fromFloat)
-                |> String.join " \u{00A0}"
-                |> text
-            ]
-        ]
 
 
 playerGameScore : Game -> Float
@@ -707,11 +744,12 @@ viewPlayerCard inGameModel ((Card cardSuit cardValue) as card) =
         viewIfInDiscardPile =
             \_ ->
                 if CardSet.member card discardPile then
-                    viewCard []
+                    viewCard
                         { x = 5.5
                         , y = 1
                         , card = card
                         , cardState = FaceDown
+                        , onClick = Nothing
                         }
                         |> Just
 
@@ -725,10 +763,8 @@ viewPlayerCard inGameModel ((Card cardSuit cardValue) as card) =
                     |> Maybe.map
                         (\index ->
                             viewCard
-                                [ onClick (Unselect card)
-                                , cursor CursorPointer
-                                ]
-                                { x = 2 + toFloat index * (cardWidth + 0.2)
+                                { onClick = Just (Unselect card)
+                                , x = 2 + toFloat index * (cardWidth + 0.2)
                                 , y =
                                     if isPreparing then
                                         2
@@ -769,15 +805,13 @@ viewPlayerCard inGameModel ((Card cardSuit cardValue) as card) =
                 in
                 if CardSet.member card reducedHand then
                     viewCard
-                        (if CardSet.size playerHand < handSize then
-                            [ onClick (Select card)
-                            , cursor CursorPointer
-                            ]
+                        { onClick =
+                            if CardSet.size playerHand < handSize then
+                                Just (Select card)
 
-                         else
-                            []
-                        )
-                        { x = 1 + (14 - toFloat cardValue) * (cardWidth + 0.2)
+                            else
+                                Nothing
+                        , x = 1.1 + (14 - toFloat cardValue) * (cardWidth + 0.2)
                         , y =
                             case cardSuit of
                                 Hearts ->
@@ -856,11 +890,12 @@ viewOpponentCard inGameModel card =
         viewIfInDiscardPile =
             \_ ->
                 if CardSet.member card discardPile then
-                    viewCard []
+                    viewCard
                         { x = 5.5
                         , y = 0
                         , card = card
                         , cardState = FaceDown
+                        , onClick = Nothing
                         }
                         |> Just
 
@@ -870,11 +905,12 @@ viewOpponentCard inGameModel card =
         viewOtherwise : () -> Maybe (Svg msg)
         viewOtherwise =
             \_ ->
-                viewCard []
+                viewCard
                     { x = 1.1
                     , y = 0
                     , card = card
                     , cardState = FaceDown
+                    , onClick = Nothing
                     }
                     |> Just
 
@@ -884,7 +920,7 @@ viewOpponentCard inGameModel card =
                 CardSet.indexOf card opponentHand
                     |> Maybe.map
                         (\index ->
-                            viewCard []
+                            viewCard
                                 { x = 2 + toFloat index * (cardWidth + 0.2)
                                 , y = 0
                                 , card = card
@@ -906,6 +942,7 @@ viewOpponentCard inGameModel card =
 
                                             GT ->
                                                 Desaturated
+                                , onClick = Nothing
                                 }
                         )
     in
@@ -964,102 +1001,147 @@ type CardState
 
 
 viewCard :
-    List (Attribute msg)
-    ->
-        { x : Float
-        , y : Float
-        , cardState : CardState
-        , card : Card kind
-        }
+    { x : Float
+    , y : Float
+    , cardState : CardState
+    , card : Card kind
+    , onClick : Maybe msg
+    }
     -> Svg msg
-viewCard attrs config =
+viewCard config =
     let
         (Card cardSuit cardValue) =
             config.card
 
-        margin : Float
-        margin =
-            0.1
-
         cardRect : Svg msg
         cardRect =
-            let
-                border : Color
-                border =
-                    Color.charcoal
-
-                cardBackground : Color
-                cardBackground =
-                    case config.cardState of
-                        FaceUp ->
-                            -- Oklch.toColor
-                            --     { alpha = 1
-                            --     , lightness = 0.85
-                            --     , chroma = 0.1
-                            --     , hue = (toFloat cardValue - 1) / toFloat deckSize
-                            --     }
-                            Color.white
-
-                        Desaturated ->
-                            -- Oklch.toColor
-                            --     { alpha = 1
-                            --     , lightness = 0.85
-                            --     , chroma = 0.01
-                            --     , hue = (toFloat cardValue - 1) / toFloat deckSize
-                            --     }
-                            Color.gray
-
-                        FaceDown ->
-                            Color.darkGreen
-            in
             rect
-                [ x margin
-                , y margin
-                , width cardWidth
-                , height cardHeight
+                [ x 0.05
+                , y 0.025
+                , width (cardWidth - 0.1)
+                , height (cardHeight - 0.05)
                 , rx 0.1
-                , fill (Paint cardBackground)
-                , stroke (Paint border)
+                , fill (Paint Color.darkGreen)
+                , stroke (Paint Color.charcoal)
+                ]
+                []
+
+        cardName : String
+        cardName =
+            cardValueToString cardValue ++ suitToEmoji cardSuit
+
+        ( paint, label ) =
+            case config.cardState of
+                FaceUp ->
+                    ( Color.black, [ text cardName ] )
+
+                Desaturated ->
+                    ( Color.rgb 0.35 0.35 0.35, [ text cardName ] )
+
+                FaceDown ->
+                    ( Color.green, [] )
+
+        textRect : Svg msg
+        textRect =
+            rect
+                [ x (cardWidth / 2 - 0.1)
+                , y (cardHeight / 2 - 0.08)
+                , width 0.2
+                , height 0.18
+                , fill (Paint Color.white)
+                ]
+                []
+
+        cardText : Svg msg
+        cardText =
+            centeredText
+                [ x (cardWidth / 2)
+                , y (cardHeight / 2)
+                , fill (Paint paint)
+                , fontSize 0.1
+                ]
+                label
+
+        attrs : List (Attribute msg)
+        attrs =
+            class [ "card" ]
+                :: transform
+                    [ Translate (config.x + 0.1 - cardClipping.left) (config.y + 0.1 - cardClipping.top)
+                    , Scale (1 / (1 - cardClipping.width)) (1 / (1 - cardClipping.height))
+                    ]
+                :: style
+                    (String.join "; "
+                        [ "transition: all 0.4s ease-in-out"
+                        , "filter: drop-shadow(0.01px 0.03px 0.02px rgb(0 0 0 / 0.4))"
+                        ]
+                    )
+                :: (case config.onClick of
+                        Nothing ->
+                            []
+
+                        Just msg ->
+                            [ onClick msg
+                            , cursor CursorPointer
+                            ]
+                   )
+
+        cardImage : Svg msg
+        cardImage =
+            image
+                [ width cardWidth
+                , height cardHeight
+                , Attributes.clipPath (ClipPathFunc "url(#card-clip)")
+                , href ("public/" ++ cardSuitToString cardSuit ++ " " ++ cardValueToString cardValue ++ ".jpg")
+                , stroke (Paint Color.charcoal)
+                , if config.cardState == Desaturated then
+                    Attributes.filter (Filter "url(#desaturate)")
+
+                  else
+                    attribute "data-empty" ""
                 ]
                 []
     in
-    g
-        (class [ "card" ]
-            :: transform [ Translate config.x config.y ]
-            :: style
-                (String.join "; "
-                    [ "transition: all 0.4s ease-in-out"
-                    , "filter: drop-shadow(0.01px 0.03px 0.02px rgb(0 0 0 / 0.4))"
-                    ]
-                )
-            :: attrs
-        )
-        (cardRect
-            :: (let
-                    cardName : String
-                    cardName =
-                        cardValueToString cardValue ++ suitToString cardSuit
-
-                    ( paint, label ) =
-                        case config.cardState of
-                            FaceUp ->
-                                ( Color.black, [ text cardName ] )
-
-                            Desaturated ->
-                                ( Color.rgb 0.35 0.35 0.35, [ text cardName ] )
-
-                            FaceDown ->
-                                ( Color.green, [] )
-                in
-                [ centeredText
-                    [ x (cardWidth / 2 + margin)
-                    , y (cardHeight / 2 + margin)
-                    , fill (Paint paint)
-                    ]
-                    label
+    case config.cardState of
+        FaceUp ->
+            g
+                attrs
+                [ cardRect
+                , cardImage
+                , textRect
+                , cardText
                 ]
-               )
-        )
+
+        Desaturated ->
+            g
+                attrs
+                [ cardRect
+                , cardImage
+                , textRect
+                , cardText
+                ]
+
+        FaceDown ->
+            g
+                attrs
+                [ cardRect
+                , text ""
+                ]
+
+
+cardSuitToString : Suit -> String
+cardSuitToString suit =
+    case suit of
+        Hearts ->
+            "Hearts"
+
+        Bells ->
+            "Bells"
+
+        Leaves ->
+            "Leaves"
+
+        Acorns ->
+            "Acorns"
 
 
 cardValueToString : Int -> String
@@ -1081,8 +1163,8 @@ cardValueToString v =
             String.fromInt v
 
 
-suitToString : Suit -> String
-suitToString suit =
+suitToEmoji : Suit -> String
+suitToEmoji suit =
     case suit of
         Hearts ->
             "♥️"
