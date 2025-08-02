@@ -8,6 +8,7 @@ import CardSet exposing (CardSet)
 import Color exposing (Color)
 import Color.Extra exposing (colorFromHex)
 import Format
+import HandKind
 import List.Extra
 import List.NonEmpty as NonEmpty exposing (NonEmpty)
 import Random
@@ -138,7 +139,7 @@ update msg model =
         ( PickedAvatar avatar, PickingAvatar generatedSeed ) ->
             let
                 ( opponentGame, newSeed ) =
-                    Random.step opponentGameGenerator generatedSeed
+                    opponentGameGenerator generatedSeed
             in
             ( initGame avatar newSeed opponentGame, Cmd.none )
 
@@ -245,7 +246,7 @@ update msg model =
                             Types.next (Types.next inGameModel.currentAvatar)
 
                         ( opponentGame, newSeed ) =
-                            Random.step opponentGameGenerator inGameModel.seed
+                            opponentGameGenerator inGameModel.seed
                     in
                     ( initGame avatar newSeed opponentGame
                     , Cmd.none
@@ -258,10 +259,49 @@ update msg model =
             ( model, Cmd.none )
 
 
-opponentGameGenerator : Random.Generator (NonEmpty (CardSet Opponent))
-opponentGameGenerator =
-    Random.constant ()
-        |> Random.andThen (\_ -> Debug.todo "generateOpponentGame")
+opponentGameGenerator : Random.Seed -> ( NonEmpty (CardSet Opponent), Random.Seed )
+opponentGameGenerator seed =
+    let
+        go : List (CardSet Opponent) -> List (Card Opponent) -> ( NonEmpty (CardSet Opponent), Random.Seed )
+        go acc queue =
+            let
+                iterate : number -> (a -> a) -> a -> a
+                iterate n f l =
+                    if n <= 0 then
+                        l
+
+                    else
+                        iterate (n - 1) f (f l)
+
+                sorted : List ( HandKind.HandKind, List (Card Opponent) )
+                sorted =
+                    (iterate 0 (shuffle seed) queue ++ iterate 1 (shuffle seed) queue ++ iterate 2 (shuffle seed) queue)
+                        |> List.Extra.groupsOf 5
+                        |> List.map (\hand -> ( HandKind.calculate hand, hand ))
+                        |> List.sortWith (\( k1, _ ) ( k2, _ ) -> HandKind.compare k1 k2)
+            in
+            case List.Extra.last sorted of
+                Just ( _, firstHandList ) ->
+                    let
+                        firstHand : CardSet Opponent
+                        firstHand =
+                            CardSet.fromList firstHandList
+                    in
+                    go (firstHand :: acc) (List.Extra.removeWhen (\c -> CardSet.member c firstHand) queue)
+
+                Nothing ->
+                    case List.reverse acc of
+                        [] ->
+                            let
+                                _ =
+                                    Debug.todo "Wut"
+                            in
+                            ( ( CardSet.empty, [] ), seed )
+
+                        head :: tail ->
+                            Random.step (Random.constant ( head, tail )) seed
+    in
+    go [] deck
 
 
 initGame : Avatar -> Random.Seed -> NonEmpty (CardSet Opponent) -> Model
@@ -285,11 +325,11 @@ view model =
 
         gameWidth : Float
         gameWidth =
-            7.5
+            7.3
 
         gameHeight : Float
         gameHeight =
-            8
+            7
 
         children : List (Svg Msg)
         children =
@@ -411,7 +451,7 @@ view model =
                     , viewAvatar (Types.previous inGameModel.currentAvatar)
                     , g [ transform [ Translate 0 3 ] ] [ viewAvatar inGameModel.currentAvatar ]
                     , g [ transform [ Translate 6.3 0 ] ] (viewPreviousBest inGameModel.previousGames)
-                    , g [ transform [ Translate 6.3 3 ] ] (viewPlayerScore inGameModel.playedHands currentPlay)
+                    , g [ transform [ Translate 0 4 ] ] (viewPlayerScore inGameModel.playedHands currentPlay)
                     , g [ id "cards" ] (viewCards inGameModel)
                     ]
     in
@@ -701,16 +741,16 @@ viewPlayerCard inGameModel ((Card cardSuit cardValue) as card) =
                                         , y =
                                             case cardSuit of
                                                 Hearts ->
-                                                    4
+                                                    3
 
                                                 Bells ->
-                                                    5
+                                                    4
 
                                                 Leaves ->
-                                                    6
+                                                    5
 
                                                 Acorns ->
-                                                    7
+                                                    6
                                         , card = card
                                         , cardState = FaceUp
                                         }
