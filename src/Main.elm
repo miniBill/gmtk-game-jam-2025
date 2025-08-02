@@ -489,7 +489,7 @@ gameFinishedView inGameModel =
                     [ x 3.5
                     , TypedSvg.Attributes.InEm.dy 1.2
                     ]
-                    [ text "think you can do better?" ]
+                    [ text "think you can beat yourself?" ]
                 ]
             , leftButton (GameMsg NextLoop) "Next loop"
             ]
@@ -504,7 +504,7 @@ gameFinishedView inGameModel =
                 [ [ "Your final score is {final}."
                         |> Format.float "final" finalPlayerScore
                   , "That's slightly better,"
-                  , "think you can do more?"
+                  , "think you can beat yourself again?"
                   ]
                     |> textBlock
                         { x = 3.5
