@@ -260,18 +260,16 @@ opponentGameGenerator seed =
         go : List (CardSet Opponent) -> List (Card Opponent) -> ( NonEmpty (CardSet Opponent), Random.Seed )
         go acc queue =
             let
-                iterate : number -> (a -> a) -> a -> a
-                iterate n f l =
+                groupsWith n l =
                     if n <= 0 then
-                        l
+                        l |> List.Extra.groupsOf 5
 
                     else
-                        iterate (n - 1) f (f l)
+                        groupsWith (n - 1) (shuffle seed l)
 
                 sorted : List ( HandKind.HandKind, List (Card Opponent) )
                 sorted =
-                    (iterate 0 (shuffle seed) queue ++ iterate 1 (shuffle seed) queue ++ iterate 2 (shuffle seed) queue)
-                        |> List.Extra.groupsOf 5
+                    (groupsWith 0 queue ++ groupsWith 1 queue ++ groupsWith 2 queue)
                         |> List.map (\hand -> ( HandKind.calculate hand, hand ))
                         |> List.sortWith (\( k1, _ ) ( k2, _ ) -> HandKind.compare k1 k2)
             in
@@ -324,7 +322,7 @@ view model =
 
         gameHeight : Float
         gameHeight =
-            6
+            7
 
         children : List (Svg Msg)
         children =
@@ -444,9 +442,9 @@ view model =
                     [ backgroundRect
                     , g [] specific
                     , viewAvatar (Types.previous inGameModel.currentAvatar)
-                    , g [ transform [ Translate 0 2 ] ] [ viewAvatar inGameModel.currentAvatar ]
-                    , g [ transform [ Translate 6.3 0 ] ] (viewPreviousBest inGameModel.previousGames)
-                    , g [ transform [ Translate 0 3 ] ] (viewPlayerScore inGameModel.playedHands currentPlay)
+                    , g [ transform [ Translate 0 3 ] ] [ viewAvatar inGameModel.currentAvatar ]
+                    , g [ transform [ Translate 6.3 1 ] ] (viewPreviousBest inGameModel.previousGames)
+                    , g [ transform [ Translate 6.3 2 ] ] (viewPlayerScore inGameModel.playedHands currentPlay)
                     , g [ id "cards" ] (viewCards inGameModel)
                     ]
     in
@@ -686,7 +684,7 @@ viewPlayerCard inGameModel ((Card cardSuit cardValue) as card) =
             \_ ->
                 if CardSet.member card discardPile then
                     viewCard []
-                        { x = 6
+                        { x = 5.5
                         , y = 1
                         , card = card
                         , cardState = FaceDown
@@ -748,25 +746,35 @@ viewPlayerCard inGameModel ((Card cardSuit cardValue) as card) =
                         in
                         if CardSet.member card reducedHand then
                             viewCard
-                                [ onClick (Select card)
-                                , cursor CursorPointer
-                                ]
+                                (if CardSet.size playerHand < handSize then
+                                    [ onClick (Select card)
+                                    , cursor CursorPointer
+                                    ]
+
+                                 else
+                                    []
+                                )
                                 { x = 1 + (14 - toFloat cardValue) * (cardWidth + 0.2)
                                 , y =
                                     case cardSuit of
                                         Hearts ->
-                                            2
-
-                                        Bells ->
                                             3
 
-                                        Leaves ->
+                                        Bells ->
                                             4
 
-                                        Acorns ->
+                                        Leaves ->
                                             5
+
+                                        Acorns ->
+                                            6
                                 , card = card
-                                , cardState = FaceUp
+                                , cardState =
+                                    if CardSet.size playerHand < handSize then
+                                        FaceUp
+
+                                    else
+                                        Desaturated
                                 }
                                 |> Just
 
@@ -803,7 +811,7 @@ viewOpponentCard inGameModel card =
             \_ ->
                 if CardSet.member card discardPile then
                     viewCard []
-                        { x = 6
+                        { x = 5.5
                         , y = 0
                         , card = card
                         , cardState = FaceDown
@@ -863,14 +871,12 @@ playHandButton playerHand =
 leftButton : msg -> String -> Svg msg
 leftButton msg label =
     g
-        [ transform [ Translate 0 1.1 ]
+        [ transform [ Translate 0 2.1 ]
         , onClick msg
         , cursor CursorPointer
         ]
         [ rect
-            [ x 0
-            , y 0
-            , width 1.8
+            [ width 1.8
             , height cardHeight
             , fill (Paint Color.orange)
             , rx 0.1
