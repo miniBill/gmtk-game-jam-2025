@@ -272,7 +272,7 @@ opponentGameGenerator seed =
 
                 sorted : List ( HandKind.HandKind, List (Card Opponent) )
                 sorted =
-                    (groupsWith 0 queue ++ groupsWith 1 queue ++ groupsWith 2 queue)
+                    (groupsWith 1 queue ++ groupsWith 1 queue ++ groupsWith 3 queue)
                         |> List.map (\hand -> ( HandKind.calculate hand, hand ))
                         |> List.sortWith (\( k1, _ ) ( k2, _ ) -> HandKind.compare k1 k2)
             in
