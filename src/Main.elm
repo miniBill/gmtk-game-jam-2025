@@ -260,6 +260,7 @@ opponentGameGenerator seed =
         go : List (CardSet Opponent) -> List (Card Opponent) -> ( NonEmpty (CardSet Opponent), Random.Seed )
         go acc queue =
             let
+                groupsWith : number -> List a -> List (List a)
                 groupsWith n l =
                     if n <= 0 then
                         l |> List.Extra.groupsOf 5
@@ -675,6 +676,29 @@ viewCards inGameModel =
 viewPlayerCard : InGameModel -> Card Player -> Svg Msg
 viewPlayerCard inGameModel ((Card cardSuit cardValue) as card) =
     let
+        isPreparing : Bool
+        isPreparing =
+            case inGameModel.game of
+                PreparingHand _ _ ->
+                    True
+
+                GameFinished ->
+                    False
+
+                PlayedHand _ _ ->
+                    False
+
+        ( playerHand, opponentHand ) =
+            case inGameModel.game of
+                PreparingHand ph oh ->
+                    ( ph, oh )
+
+                PlayedHand ph oh ->
+                    ( ph, oh )
+
+                GameFinished ->
+                    ( CardSet.empty, CardSet.empty )
+
         discardPile : CardSet Player
         discardPile =
             List.foldl (\( p, _ ) a -> CardSet.union p a) CardSet.empty inGameModel.playedHands
@@ -694,98 +718,97 @@ viewPlayerCard inGameModel ((Card cardSuit cardValue) as card) =
                 else
                     Nothing
 
-        ( playerHand, opponentHand ) =
-            case inGameModel.game of
-                PreparingHand ph oh ->
-                    ( ph, oh )
-
-                PlayedHand ph oh ->
-                    ( ph, oh )
-
-                GameFinished ->
-                    ( CardSet.empty, CardSet.empty )
-
-        specific : List (() -> Maybe (Svg GameMsg))
-        specific =
-            let
-                viewIfSelected : () -> Maybe (Svg GameMsg)
-                viewIfSelected =
-                    \_ ->
-                        CardSet.indexOf card playerHand
-                            |> Maybe.map
-                                (\index ->
-                                    viewCard
-                                        [ onClick (Unselect card)
-                                        , cursor CursorPointer
-                                        ]
-                                        { x = 2 + toFloat index * (cardWidth + 0.2)
-                                        , y = 1
-                                        , card = card
-                                        , cardState =
-                                            case CardSet.compare playerHand opponentHand of
-                                                LT ->
-                                                    Desaturated
-
-                                                EQ ->
-                                                    FaceUp
-
-                                                GT ->
-                                                    FaceUp
-                                        }
-                                )
-
-                viewIfInDeck : () -> Maybe (Svg GameMsg)
-                viewIfInDeck =
-                    \_ ->
-                        let
-                            reducedHand : CardSet Player
-                            reducedHand =
-                                CardSet.diff
-                                    (CardSet.diff (CardSet.fromList deck) discardPile)
-                                    playerHand
-                        in
-                        if CardSet.member card reducedHand then
+        viewIfSelected : () -> Maybe (Svg GameMsg)
+        viewIfSelected =
+            \_ ->
+                CardSet.indexOf card playerHand
+                    |> Maybe.map
+                        (\index ->
                             viewCard
-                                (if CardSet.size playerHand < handSize then
-                                    [ onClick (Select card)
-                                    , cursor CursorPointer
-                                    ]
-
-                                 else
-                                    []
-                                )
-                                { x = 1 + (14 - toFloat cardValue) * (cardWidth + 0.2)
+                                [ onClick (Unselect card)
+                                , cursor CursorPointer
+                                ]
+                                { x = 2 + toFloat index * (cardWidth + 0.2)
                                 , y =
-                                    case cardSuit of
-                                        Hearts ->
-                                            3
-
-                                        Bells ->
-                                            4
-
-                                        Leaves ->
-                                            5
-
-                                        Acorns ->
-                                            6
-                                , card = card
-                                , cardState =
-                                    if CardSet.size playerHand < handSize then
-                                        FaceUp
+                                    if isPreparing then
+                                        2
 
                                     else
-                                        Desaturated
-                                }
-                                |> Just
+                                        1
+                                , card = card
+                                , cardState =
+                                    if isPreparing then
+                                        if HandKind.belongs card (CardSet.handKind playerHand) then
+                                            FaceUp
 
-                        else
-                            Nothing
-            in
-            [ viewIfSelected
-            , viewIfInDeck
-            ]
+                                        else
+                                            Desaturated
+
+                                    else
+                                        case CardSet.compare playerHand opponentHand of
+                                            LT ->
+                                                Desaturated
+
+                                            EQ ->
+                                                FaceUp
+
+                                            GT ->
+                                                FaceUp
+                                }
+                        )
+
+        viewIfInDeck : () -> Maybe (Svg GameMsg)
+        viewIfInDeck =
+            \_ ->
+                let
+                    reducedHand : CardSet Player
+                    reducedHand =
+                        CardSet.diff
+                            (CardSet.diff (CardSet.fromList deck) discardPile)
+                            playerHand
+                in
+                if CardSet.member card reducedHand then
+                    viewCard
+                        (if CardSet.size playerHand < handSize then
+                            [ onClick (Select card)
+                            , cursor CursorPointer
+                            ]
+
+                         else
+                            []
+                        )
+                        { x = 1 + (14 - toFloat cardValue) * (cardWidth + 0.2)
+                        , y =
+                            case cardSuit of
+                                Hearts ->
+                                    3
+
+                                Bells ->
+                                    4
+
+                                Leaves ->
+                                    5
+
+                                Acorns ->
+                                    6
+                        , card = card
+                        , cardState =
+                            if CardSet.size playerHand < handSize then
+                                FaceUp
+
+                            else
+                                Desaturated
+                        }
+                        |> Just
+
+                else
+                    Nothing
     in
-    findFirst (viewIfInDiscardPile :: specific)
+    findFirst
+        [ viewIfInDiscardPile
+        , viewIfSelected
+        , viewIfInDeck
+        ]
         |> TypedSvg.Core.map GameMsg
 
 
@@ -802,6 +825,29 @@ findFirst list =
 viewOpponentCard : InGameModel -> Card Opponent -> Svg Msg
 viewOpponentCard inGameModel card =
     let
+        isPreparing : Bool
+        isPreparing =
+            case inGameModel.game of
+                PreparingHand _ _ ->
+                    True
+
+                GameFinished ->
+                    False
+
+                PlayedHand _ _ ->
+                    False
+
+        ( playerHand, opponentHand ) =
+            case inGameModel.game of
+                PreparingHand ph oh ->
+                    ( ph, oh )
+
+                PlayedHand ph oh ->
+                    ( ph, oh )
+
+                GameFinished ->
+                    ( CardSet.empty, CardSet.empty )
+
         discardPile : CardSet Opponent
         discardPile =
             List.foldl (\( _, o ) a -> CardSet.union o a) CardSet.empty inGameModel.playedHands
@@ -821,20 +867,20 @@ viewOpponentCard inGameModel card =
                 else
                     Nothing
 
-        ( playerHand, opponentHand ) =
-            case inGameModel.game of
-                PreparingHand ph oh ->
-                    ( ph, oh )
+        viewOtherwise : () -> Maybe (Svg msg)
+        viewOtherwise =
+            \_ ->
+                viewCard []
+                    { x = 1.1
+                    , y = 0
+                    , card = card
+                    , cardState = FaceDown
+                    }
+                    |> Just
 
-                PlayedHand ph oh ->
-                    ( ph, oh )
-
-                GameFinished ->
-                    ( CardSet.empty, CardSet.empty )
-
-        specific : List (() -> Maybe (Svg msg))
-        specific =
-            [ \_ ->
+        viewIfNextHand : () -> Maybe (Svg msg)
+        viewIfNextHand =
+            \_ ->
                 CardSet.indexOf card opponentHand
                     |> Maybe.map
                         (\index ->
@@ -843,20 +889,27 @@ viewOpponentCard inGameModel card =
                                 , y = 0
                                 , card = card
                                 , cardState =
-                                    case CardSet.compare playerHand opponentHand of
-                                        LT ->
+                                    if isPreparing then
+                                        if HandKind.belongs card (CardSet.handKind opponentHand) then
                                             FaceUp
 
-                                        EQ ->
-                                            FaceUp
-
-                                        GT ->
+                                        else
                                             Desaturated
+
+                                    else
+                                        case CardSet.compare playerHand opponentHand of
+                                            LT ->
+                                                FaceUp
+
+                                            EQ ->
+                                                FaceUp
+
+                                            GT ->
+                                                Desaturated
                                 }
                         )
-            ]
     in
-    findFirst (viewIfInDiscardPile :: specific)
+    findFirst [ viewIfInDiscardPile, viewIfNextHand, viewOtherwise ]
 
 
 playHandButton : CardSet Player -> Maybe (Svg Msg)
