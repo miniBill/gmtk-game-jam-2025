@@ -7,7 +7,7 @@ import Avataaars.Eyebrow as Eyebrow exposing (Eyebrow)
 import Avataaars.Eyes as Eyes exposing (Eyes)
 import Avataaars.Face exposing (Face)
 import Avataaars.FacialHair as FacialHair exposing (FacialHair)
-import Avataaars.Graphics exposing (Graphics(..))
+import Avataaars.Graphics exposing (Graphics)
 import Avataaars.HairColor as HairColor exposing (HairColor)
 import Avataaars.HatColor as HatColor exposing (HatColor)
 import Avataaars.Mouth as Mouth exposing (Mouth)
@@ -24,7 +24,7 @@ import TypedSvg.Core exposing (Svg, text)
 import TypedSvg.Events exposing (onClick)
 import TypedSvg.Extra exposing (centeredText)
 import TypedSvg.Types exposing (Cursor(..), Transform(..))
-import Types exposing (Character(..))
+import Types exposing (Character)
 
 
 type alias Config =

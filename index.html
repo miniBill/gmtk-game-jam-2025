@@ -5,25 +5,20 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>Better Again</title>
         <style>
-            html {
-                box-sizing: border-box;
-            }
-
-            *,
-            *:before,
-            *:after {
-                box-sizing: inherit;
-            }
-
+            html,
             body {
-                background: black;
                 margin: 0;
-                padding: 20px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                height: 100dvh;
-                width: 100vw;
+                padding: 0;
+                overflow: hidden;
+                background: black;
+            }
+
+            svg {
+                position: fixed;
+                top: 20px;
+                left: 20px;
+                height: calc(100% - 40px);
+                width: calc(100% - 40px);
             }
 
             svg text {

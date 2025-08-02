@@ -15,8 +15,9 @@
             "elm-community/typed-svg": "7.0.0",
             "elmcraft/core-extra": "2.2.0",
             "miniBill/elm-avataaars": "1.1.2",
-            "miniBill/elm-oklch": "1.0.0",
-            "rtfeldman/elm-hex": "1.0.0"
+            "miniBill/elm-fast-dict": "1.2.4",
+            "rtfeldman/elm-hex": "1.0.0",
+            "turboMaCk/non-empty-list-alias": "1.4.0"
         },
         "indirect": {
             "elm/html": "1.0.0",

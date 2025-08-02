@@ -1,4 +1,4 @@
-module Types exposing (Card, Character(..), Flags, Opponent, Player, allCharacters, cardValue, characterToColor, giveToOpponent, isOpponentCard, next, opponentCard, playerCard, previous)
+module Types exposing (Card(..), Character(..), Flags, Opponent, Player, Suit(..), allCharacters, characterToColor, giveToOpponent, next, previous)
 
 import Avataaars.Graphics exposing (Graphics(..))
 
@@ -7,28 +7,15 @@ type alias Flags =
     {}
 
 
-playerCard : Int -> Card Player
-playerCard c =
-    Card { opponent = False } c
-
-
-opponentCard : Int -> Card Opponent
-opponentCard c =
-    Card { opponent = True } c
-
-
-cardValue : Card kind -> Int
-cardValue (Card _ c) =
-    c
-
-
-isOpponentCard : Card kind -> Bool
-isOpponentCard (Card { opponent } _) =
-    opponent
-
-
 type Card kind
-    = Card { opponent : Bool } Int
+    = Card Suit Int
+
+
+type Suit
+    = Hearts
+    | Bells
+    | Leaves
+    | Acorns
 
 
 type Player
@@ -322,5 +309,5 @@ previousGraphics graphics =
 
 
 giveToOpponent : Card Player -> Card Opponent
-giveToOpponent (Card _ c) =
-    Card { opponent = True } c
+giveToOpponent (Card s c) =
+    Card s c
