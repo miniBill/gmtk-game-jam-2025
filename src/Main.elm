@@ -334,10 +334,6 @@ view model =
 
                 PickingAvatar generatedSeed ->
                     let
-                        scale : Float
-                        scale =
-                            0.9
-
                         perRow : number
                         perRow =
                             6
@@ -359,12 +355,11 @@ view model =
                                     (\x avatar ->
                                         g
                                             [ transform
-                                                [ Scale scale scale
-                                                , Translate
+                                                [ Translate
                                                     (toFloat (x + (perRow - List.length row) // 2)
-                                                        + ((gameWidth / scale - perRow) / 2)
+                                                        + ((gameWidth - perRow) / 2)
                                                     )
-                                                    (toFloat y + 0.75)
+                                                    (toFloat y + 1.75)
                                                 ]
                                             , onClick (PickedAvatar avatar)
                                             , cursor CursorPointer
@@ -382,7 +377,7 @@ view model =
                         |> g []
                     , centeredText
                         [ x (gameWidth / 2)
-                        , y (scale / 2)
+                        , y 1
                         , fill (Paint Color.white)
                         ]
                         [ text "Pick your avatar" ]
