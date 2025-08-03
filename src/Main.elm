@@ -416,9 +416,25 @@ view model =
                         specific : List (Svg Msg)
                         specific =
                             case inGameModel.game of
-                                PreparingHand playerHand _ ->
+                                PreparingHand playerHand opponentHand ->
                                     List.filterMap identity
-                                        [ playHandButton playerHand ]
+                                        [ playHandButton playerHand
+                                        , g
+                                            [ id "opponent-hand-kind"
+                                            , transform [ Translate 3.7 1.3 ]
+                                            ]
+                                            [ viewHandKind opponentHand ]
+                                            |> Just
+                                        , CardSet.calculateHandKind playerHand
+                                            |> Maybe.map
+                                                (\ph ->
+                                                    g
+                                                        [ id "player-hand-kind"
+                                                        , transform [ Translate 3.7 1.7 ]
+                                                        ]
+                                                        [ viewHandKind ph ]
+                                                )
+                                        ]
 
                                 PlayedHand _ _ ->
                                     let
@@ -481,6 +497,13 @@ view model =
         , viewBox -border -border (gameWidth + border * 2) (gameHeight + border * 2)
         ]
         children
+
+
+viewHandKind : CardSet kind HandKind -> Svg msg
+viewHandKind cardSet =
+    centeredText
+        [ fill (Paint Color.white) ]
+        [ text (HandKind.toString (CardSet.handKind cardSet)) ]
 
 
 cardClipping : { left : Float, top : Float, width : Float, height : Float, rx : Float }

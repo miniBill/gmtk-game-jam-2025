@@ -1,4 +1,4 @@
-module HandKind exposing (HandKind(..), belongs, calculate, compare)
+module HandKind exposing (HandKind(..), belongs, calculate, compare, toString)
 
 import Dict
 import Dict.Extra
@@ -96,7 +96,7 @@ calculate list =
             _ ->
                 let
                     _ =
-                        Debug.log "branch not implemented" grouped
+                        Debug.log "impossible case" grouped
                 in
                 isFlush
 
@@ -221,3 +221,34 @@ belongs (Card _ v) kind =
 
         StraightFlush _ ->
             True
+
+
+toString : HandKind -> String
+toString kind =
+    case kind of
+        HighCard _ ->
+            "High card"
+
+        Pair _ ->
+            "Pair"
+
+        TwoPair _ _ ->
+            "Two pairs"
+
+        ThreeOfAKind _ ->
+            "Three of a kind"
+
+        Straight _ ->
+            "Straight"
+
+        Flush _ ->
+            "Flush"
+
+        FullHouse _ _ ->
+            "Full house"
+
+        FourOfAKind _ ->
+            "Four of a kind"
+
+        StraightFlush _ ->
+            "Straight flush"
