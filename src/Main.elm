@@ -8,7 +8,7 @@ import CardSet exposing (CardSet)
 import Color exposing (Color)
 import Color.Extra exposing (colorFromHex)
 import Format
-import HandKind
+import HandKind exposing (HandKind)
 import List.Extra
 import List.NonEmpty as NonEmpty exposing (NonEmpty)
 import Random
@@ -61,7 +61,7 @@ type alias InGameModel =
     , playedHands : List OpposedHands
     , seed : Random.Seed
     , game : GameStep
-    , replaying : List (CardSet Opponent)
+    , replaying : List (CardSet Opponent HandKind)
     , previousGames : List Game
     }
 
@@ -75,8 +75,8 @@ type alias Avatar =
 
 
 type alias OpposedHands =
-    ( CardSet Player
-    , CardSet Opponent
+    ( CardSet Player HandKind
+    , CardSet Opponent HandKind
     )
 
 
@@ -87,8 +87,8 @@ type Model
 
 
 type GameStep
-    = PreparingHand (CardSet Player) (CardSet Opponent)
-    | PlayedHand (CardSet Player) (CardSet Opponent)
+    = PreparingHand (CardSet Player ()) (CardSet Opponent HandKind)
+    | PlayedHand (CardSet Player HandKind) (CardSet Opponent HandKind)
     | GameFinished
 
 
@@ -169,14 +169,15 @@ update msg model =
                     ( model, Cmd.none )
 
                 ( SubmitHand, PreparingHand playerChoices opponentChoices ) ->
-                    if CardSet.size playerChoices == handSize then
-                        ( PlayedHand playerChoices opponentChoices
-                            |> stillInGame
-                        , Cmd.none
-                        )
+                    case CardSet.calculateHandKind playerChoices of
+                        Just playerHand ->
+                            ( PlayedHand playerHand opponentChoices
+                                |> stillInGame
+                            , Cmd.none
+                            )
 
-                    else
-                        ( model, Cmd.none )
+                        Nothing ->
+                            ( model, Cmd.none )
 
                 ( SubmitHand, _ ) ->
                     ( model, Cmd.none )
@@ -206,32 +207,29 @@ update msg model =
                     ( model, Cmd.none )
 
                 ( NextLoop, GameFinished ) ->
-                    let
-                        ( firstOpponentHand, replaying ) =
-                            -- This is intentionally reversing, `playedHands` is most-recent-first,
-                            -- `replaying` is oldest-first
-                            case
-                                List.foldl
-                                    (\( c, _ ) a -> CardSet.giveToOpponent c :: a)
-                                    []
-                                    inGameModel.playedHands
-                            of
-                                [] ->
-                                    ( CardSet.empty, [] )
+                    -- This is intentionally reversing, `playedHands` is most-recent-first,
+                    -- `replaying` is oldest-first
+                    case
+                        List.foldl
+                            (\( c, _ ) a -> CardSet.giveToOpponent c :: a)
+                            []
+                            inGameModel.playedHands
+                    of
+                        [] ->
+                            -- Impossible
+                            ( model, Cmd.none )
 
-                                h :: t ->
-                                    ( h, t )
-                    in
-                    ( InGame
-                        { currentAvatar = Types.next inGameModel.currentAvatar
-                        , playedHands = []
-                        , replaying = replaying
-                        , previousGames = inGameModel.playedHands :: inGameModel.previousGames
-                        , game = PreparingHand CardSet.empty firstOpponentHand
-                        , seed = inGameModel.seed
-                        }
-                    , Cmd.none
-                    )
+                        firstOpponentHand :: replaying ->
+                            ( InGame
+                                { currentAvatar = Types.next inGameModel.currentAvatar
+                                , playedHands = []
+                                , replaying = replaying
+                                , previousGames = inGameModel.playedHands :: inGameModel.previousGames
+                                , game = PreparingHand CardSet.empty firstOpponentHand
+                                , seed = inGameModel.seed
+                                }
+                            , Cmd.none
+                            )
 
                 ( NextLoop, _ ) ->
                     ( model, Cmd.none )
@@ -256,10 +254,10 @@ update msg model =
             ( model, Cmd.none )
 
 
-opponentGameGenerator : Random.Seed -> ( NonEmpty (CardSet Opponent), Random.Seed )
+opponentGameGenerator : Random.Seed -> ( NonEmpty (CardSet Opponent HandKind), Random.Seed )
 opponentGameGenerator seed =
     let
-        go : List (CardSet Opponent) -> List (Card Opponent) -> ( NonEmpty (CardSet Opponent), Random.Seed )
+        go : List (CardSet Opponent HandKind) -> List (Card Opponent) -> ( NonEmpty (CardSet Opponent HandKind), Random.Seed )
         go acc queue =
             let
                 groupsWith : number -> List a -> List (List a)
@@ -270,19 +268,19 @@ opponentGameGenerator seed =
                     else
                         groupsWith (n - 1) (shuffle seed l)
 
-                sorted : List ( HandKind.HandKind, List (Card Opponent) )
+                sorted : List (CardSet Opponent HandKind)
                 sorted =
                     (groupsWith 1 queue ++ groupsWith 1 queue ++ groupsWith 3 queue)
-                        |> List.map (\hand -> ( HandKind.calculate hand, hand ))
-                        |> List.sortWith (\( k1, _ ) ( k2, _ ) -> HandKind.compare k1 k2)
+                        |> List.filterMap
+                            (\hand ->
+                                hand
+                                    |> CardSet.fromList
+                                    |> CardSet.calculateHandKind
+                            )
+                        |> List.sortWith (\c1 c2 -> HandKind.compare (CardSet.handKind c1) (CardSet.handKind c2))
             in
             case List.Extra.last sorted of
-                Just ( _, firstHandList ) ->
-                    let
-                        firstHand : CardSet Opponent
-                        firstHand =
-                            CardSet.fromList firstHandList
-                    in
+                Just firstHand ->
                     go (firstHand :: acc) (List.Extra.removeWhen (\c -> CardSet.member c firstHand) queue)
 
                 Nothing ->
@@ -290,9 +288,10 @@ opponentGameGenerator seed =
                         [] ->
                             let
                                 _ =
-                                    Debug.todo "Wut"
+                                    -- Crash
+                                    modBy 0 0
                             in
-                            ( ( CardSet.empty, [] ), seed )
+                            go acc queue
 
                         head :: tail ->
                             Random.step (Random.constant ( head, tail )) seed
@@ -300,7 +299,7 @@ opponentGameGenerator seed =
     go [] deck
 
 
-initGame : Avatar -> Random.Seed -> NonEmpty (CardSet Opponent) -> Model
+initGame : Avatar -> Random.Seed -> NonEmpty (CardSet Opponent HandKind) -> Model
 initGame avatar generatedSeed opponentGame =
     InGame
         { currentAvatar = avatar
@@ -713,32 +712,26 @@ viewCards inGameModel =
 viewPlayerCard : InGameModel -> Card Player -> Svg Msg
 viewPlayerCard inGameModel ((Card cardSuit cardValue) as card) =
     let
-        isPreparing : Bool
-        isPreparing =
+        playerHand : CardSet Player ()
+        playerHand =
             case inGameModel.game of
-                PreparingHand _ _ ->
-                    True
+                PreparingHand ph _ ->
+                    ph
+
+                PlayedHand ph _ ->
+                    CardSet.forgetHandKind ph
 
                 GameFinished ->
-                    False
+                    CardSet.empty
 
-                PlayedHand _ _ ->
-                    False
-
-        ( playerHand, opponentHand ) =
-            case inGameModel.game of
-                PreparingHand ph oh ->
-                    ( ph, oh )
-
-                PlayedHand ph oh ->
-                    ( ph, oh )
-
-                GameFinished ->
-                    ( CardSet.empty, CardSet.empty )
-
-        discardPile : CardSet Player
+        discardPile : CardSet Player ()
         discardPile =
-            List.foldl (\( p, _ ) a -> CardSet.union p a) CardSet.empty inGameModel.playedHands
+            List.foldl
+                (\( p, _ ) a ->
+                    CardSet.union (CardSet.forgetHandKind p) a
+                )
+                CardSet.empty
+                inGameModel.playedHands
 
         viewIfInDiscardPile : () -> Maybe (Svg msg)
         viewIfInDiscardPile =
@@ -762,42 +755,64 @@ viewPlayerCard inGameModel ((Card cardSuit cardValue) as card) =
                 CardSet.indexOf card playerHand
                     |> Maybe.map
                         (\index ->
-                            viewCard
-                                { onClick = Just (Unselect card)
-                                , x = 2 + toFloat index * (cardWidth + 0.2)
-                                , y =
-                                    if isPreparing then
-                                        2
+                            let
+                                x : Float
+                                x =
+                                    2 + toFloat index * (cardWidth + 0.2)
+                            in
+                            case inGameModel.game of
+                                PreparingHand ph _ ->
+                                    viewCard
+                                        { onClick = Just (Unselect card)
+                                        , x = x
+                                        , y = 2
+                                        , card = card
+                                        , cardState =
+                                            case CardSet.calculateHandKind ph of
+                                                Nothing ->
+                                                    FaceUp
 
-                                    else
-                                        1
-                                , card = card
-                                , cardState =
-                                    if isPreparing then
-                                        if HandKind.belongs card (CardSet.handKind playerHand) then
-                                            FaceUp
+                                                Just hand ->
+                                                    if HandKind.belongs card (CardSet.handKind hand) then
+                                                        FaceUp
 
-                                        else
-                                            Desaturated
+                                                    else
+                                                        Desaturated
+                                        }
 
-                                    else
-                                        case CardSet.compare playerHand opponentHand of
-                                            LT ->
-                                                Desaturated
+                                PlayedHand ph oh ->
+                                    viewCard
+                                        { onClick = Just (Unselect card)
+                                        , x = x
+                                        , y = 1
+                                        , card = card
+                                        , cardState =
+                                            case CardSet.compare ph oh of
+                                                LT ->
+                                                    Desaturated
 
-                                            EQ ->
-                                                FaceUp
+                                                EQ ->
+                                                    FaceUp
 
-                                            GT ->
-                                                FaceUp
-                                }
+                                                GT ->
+                                                    FaceUp
+                                        }
+
+                                GameFinished ->
+                                    viewCard
+                                        { onClick = Just (Unselect card)
+                                        , x = x
+                                        , y = 1
+                                        , card = card
+                                        , cardState = FaceUp
+                                        }
                         )
 
         viewIfInDeck : () -> Maybe (Svg GameMsg)
         viewIfInDeck =
             \_ ->
                 let
-                    reducedHand : CardSet Player
+                    reducedHand : CardSet Player ()
                     reducedHand =
                         CardSet.diff
                             (CardSet.diff (CardSet.fromList deck) discardPile)
@@ -859,32 +874,21 @@ findFirst list =
 viewOpponentCard : InGameModel -> Card Opponent -> Svg Msg
 viewOpponentCard inGameModel card =
     let
-        isPreparing : Bool
-        isPreparing =
+        opponentHand : Maybe (CardSet Opponent HandKind)
+        opponentHand =
             case inGameModel.game of
-                PreparingHand _ _ ->
-                    True
+                PreparingHand _ oh ->
+                    Just oh
+
+                PlayedHand _ oh ->
+                    Just oh
 
                 GameFinished ->
-                    False
+                    Nothing
 
-                PlayedHand _ _ ->
-                    False
-
-        ( playerHand, opponentHand ) =
-            case inGameModel.game of
-                PreparingHand ph oh ->
-                    ( ph, oh )
-
-                PlayedHand ph oh ->
-                    ( ph, oh )
-
-                GameFinished ->
-                    ( CardSet.empty, CardSet.empty )
-
-        discardPile : CardSet Opponent
+        discardPile : CardSet Opponent ()
         discardPile =
-            List.foldl (\( _, o ) a -> CardSet.union o a) CardSet.empty inGameModel.playedHands
+            List.foldl (\( _, o ) a -> CardSet.union (CardSet.forgetHandKind o) a) CardSet.empty inGameModel.playedHands
 
         viewIfInDiscardPile : () -> Maybe (Svg msg)
         viewIfInDiscardPile =
@@ -917,39 +921,60 @@ viewOpponentCard inGameModel card =
         viewIfNextHand : () -> Maybe (Svg msg)
         viewIfNextHand =
             \_ ->
-                CardSet.indexOf card opponentHand
-                    |> Maybe.map
-                        (\index ->
-                            viewCard
-                                { x = 2 + toFloat index * (cardWidth + 0.2)
-                                , y = 0
-                                , card = card
-                                , cardState =
-                                    if isPreparing then
-                                        if HandKind.belongs card (CardSet.handKind opponentHand) then
-                                            FaceUp
+                opponentHand
+                    |> Maybe.andThen
+                        (\oh ->
+                            CardSet.indexOf card oh
+                                |> Maybe.map
+                                    (\index ->
+                                        case inGameModel.game of
+                                            PreparingHand _ _ ->
+                                                viewCard
+                                                    { x = 2 + toFloat index * (cardWidth + 0.2)
+                                                    , y = 0
+                                                    , card = card
+                                                    , cardState =
+                                                        if HandKind.belongs card (CardSet.handKind oh) then
+                                                            FaceUp
 
-                                        else
-                                            Desaturated
+                                                        else
+                                                            Desaturated
+                                                    , onClick = Nothing
+                                                    }
 
-                                    else
-                                        case CardSet.compare playerHand opponentHand of
-                                            LT ->
-                                                FaceUp
+                                            PlayedHand ph _ ->
+                                                viewCard
+                                                    { x = 2 + toFloat index * (cardWidth + 0.2)
+                                                    , y = 0
+                                                    , card = card
+                                                    , cardState =
+                                                        case CardSet.compare ph oh of
+                                                            LT ->
+                                                                FaceUp
 
-                                            EQ ->
-                                                FaceUp
+                                                            EQ ->
+                                                                FaceUp
 
-                                            GT ->
-                                                Desaturated
-                                , onClick = Nothing
-                                }
+                                                            GT ->
+                                                                Desaturated
+                                                    , onClick = Nothing
+                                                    }
+
+                                            GameFinished ->
+                                                viewCard
+                                                    { x = 2 + toFloat index * (cardWidth + 0.2)
+                                                    , y = 0
+                                                    , card = card
+                                                    , cardState = FaceUp
+                                                    , onClick = Nothing
+                                                    }
+                                    )
                         )
     in
     findFirst [ viewIfInDiscardPile, viewIfNextHand, viewOtherwise ]
 
 
-playHandButton : CardSet Player -> Maybe (Svg Msg)
+playHandButton : CardSet Player handKind -> Maybe (Svg Msg)
 playHandButton playerHand =
     if CardSet.size playerHand == handSize then
         Just <| leftButton (GameMsg SubmitHand) "Play hand"
