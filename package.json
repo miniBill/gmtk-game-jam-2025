@@ -8,6 +8,6 @@
     "scripts": {
         "start": "elm-watch hot",
         "build": "elm make src/Main.elm --output build/main.js --optimize && cp build/main.js dist/build && cp index.html dist",
-        "publish": "yarn build && butler push dist miniBill/better-again:web"
+        "publish": "yarn build && nix shell nixpkgs#butler --command butler push dist miniBill/better-again:web"
     }
 }
