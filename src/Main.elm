@@ -23,7 +23,7 @@ import TypedSvg.Extra exposing (centeredText)
 import TypedSvg.Filters exposing (colorMatrix)
 import TypedSvg.Filters.Attributes exposing (colorMatrixType, colorMatrixValues, in_)
 import TypedSvg.Types exposing (ClipPath(..), ColorMatrixType(..), Cursor(..), DominantBaseline(..), Filter(..), InValue(..), Paint(..), Transform(..))
-import Types exposing (Card(..), Character, Flags, Opponent, Player, Suit(..))
+import Types exposing (Card(..), Character, Flags, Opponent, Player, Suit(..), cardValueToString)
 
 
 handSize : number
@@ -421,16 +421,35 @@ view model =
                                         [ playHandButton playerHand
                                         , g
                                             [ id "opponent-hand-kind"
-                                            , transform [ Translate 3.7 1.3 ]
+                                            , transform [ Translate 3.7 1.25 ]
                                             ]
                                             [ viewHandKind opponentHand ]
                                             |> Just
                                         , CardSet.calculateHandKind playerHand
                                             |> Maybe.map
                                                 (\ph ->
+                                                    centeredText
+                                                        [ id "hand-kind-comparison"
+                                                        , transform [ Translate 3.7 1.5 ]
+                                                        , fill (Paint Color.white)
+                                                        ]
+                                                        [ case CardSet.compare ph opponentHand of
+                                                            LT ->
+                                                                text "beats your"
+
+                                                            EQ ->
+                                                                text "="
+
+                                                            GT ->
+                                                                text "is beaten by your"
+                                                        ]
+                                                )
+                                        , CardSet.calculateHandKind playerHand
+                                            |> Maybe.map
+                                                (\ph ->
                                                     g
                                                         [ id "player-hand-kind"
-                                                        , transform [ Translate 3.7 1.7 ]
+                                                        , transform [ Translate 3.7 1.75 ]
                                                         ]
                                                         [ viewHandKind ph ]
                                                 )
@@ -1190,25 +1209,6 @@ cardSuitToString suit =
 
         Acorns ->
             "Acorns"
-
-
-cardValueToString : Int -> String
-cardValueToString v =
-    case v of
-        14 ->
-            "A"
-
-        13 ->
-            "K"
-
-        12 ->
-            "O"
-
-        11 ->
-            "U"
-
-        _ ->
-            String.fromInt v
 
 
 suitToEmoji : Suit -> String

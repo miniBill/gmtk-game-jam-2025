@@ -1,4 +1,4 @@
-module Types exposing (Card(..), Character(..), Flags, Opponent, Player, Suit(..), allCharacters, characterToColor, giveToOpponent, next, previous)
+module Types exposing (Card(..), Character(..), Flags, Opponent, Player, Suit(..), allCharacters, cardValueToString, characterToColor, giveToOpponent, next, previous)
 
 import Avataaars.Graphics exposing (Graphics(..))
 
@@ -311,3 +311,22 @@ previousGraphics graphics =
 giveToOpponent : Card Player -> Card Opponent
 giveToOpponent (Card s c) =
     Card s c
+
+
+cardValueToString : Int -> String
+cardValueToString v =
+    case v of
+        14 ->
+            "A"
+
+        13 ->
+            "K"
+
+        12 ->
+            "O"
+
+        11 ->
+            "U"
+
+        _ ->
+            String.fromInt v

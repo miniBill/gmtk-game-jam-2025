@@ -226,29 +226,29 @@ belongs (Card _ v) kind =
 toString : HandKind -> String
 toString kind =
     case kind of
-        HighCard _ ->
-            "High card"
+        HighCard v ->
+            "High card, " ++ Types.cardValueToString v
 
-        Pair _ ->
-            "Pair"
+        Pair v ->
+            "One pair, " ++ Types.cardValueToString v ++ "s"
 
-        TwoPair _ _ ->
-            "Two pairs"
+        TwoPair h l ->
+            "Two pairs, " ++ Types.cardValueToString h ++ "s and " ++ Types.cardValueToString l ++ "s"
 
-        ThreeOfAKind _ ->
-            "Three of a kind"
+        ThreeOfAKind v ->
+            "Three of a kind, " ++ Types.cardValueToString v ++ "s"
 
-        Straight _ ->
-            "Straight"
+        Straight h ->
+            Types.cardValueToString h ++ "-high straight"
 
-        Flush _ ->
-            "Flush"
+        Flush h ->
+            Types.cardValueToString h ++ "-high flush"
 
-        FullHouse _ _ ->
-            "Full house"
+        FullHouse h l ->
+            "Full house, " ++ Types.cardValueToString h ++ "s over " ++ Types.cardValueToString l ++ "s"
 
-        FourOfAKind _ ->
-            "Four of a kind"
+        FourOfAKind v ->
+            "Four of a kind, " ++ Types.cardValueToString v ++ "s"
 
-        StraightFlush _ ->
-            "Straight flush"
+        StraightFlush h ->
+            Types.cardValueToString h ++ "-high straight flush"
