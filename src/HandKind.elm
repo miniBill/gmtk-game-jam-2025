@@ -94,11 +94,11 @@ calculate list =
                     |> Just
 
             _ ->
-                let
-                    _ =
-                        Debug.log "impossible case" grouped
-                in
-                isFlush
+                -- let
+                --     _ =
+                --         Debug.log "impossible case" grouped
+                -- in
+                Nothing
 
 
 compare : HandKind -> HandKind -> Order
